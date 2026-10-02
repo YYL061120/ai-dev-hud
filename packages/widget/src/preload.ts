@@ -2,6 +2,36 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { WidgetData } from './data'
 import type { WidgetSettings } from './settings'
 import type { ExchangeRateState } from './currency'
+import type { HudData } from './hud-data'
+import type { HudState } from './hud-window'
+
+export interface HudAPI {
+  enabled: boolean
+  getData: () => Promise<HudData>
+  getState: () => Promise<HudState>
+  setExpanded: (expanded: boolean) => Promise<HudState>
+  openDashboard: () => Promise<void>
+  onDataUpdate: (callback: (data: HudData) => void) => () => void
+  onStateUpdate: (callback: (state: HudState) => void) => () => void
+}
+
+contextBridge.exposeInMainWorld('hud', {
+  enabled: process.argv.includes('--ai-dev-hud'),
+  getData: () => ipcRenderer.invoke('hud:get-data'),
+  getState: () => ipcRenderer.invoke('hud:get-state'),
+  setExpanded: (expanded: boolean) => ipcRenderer.invoke('hud:set-expanded', expanded),
+  openDashboard: () => ipcRenderer.invoke('widget:open-dashboard'),
+  onDataUpdate: (callback: (data: HudData) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: HudData) => callback(data)
+    ipcRenderer.on('hud:data-update', listener)
+    return () => ipcRenderer.removeListener('hud:data-update', listener)
+  },
+  onStateUpdate: (callback: (state: HudState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: HudState) => callback(state)
+    ipcRenderer.on('hud:state-update', listener)
+    return () => ipcRenderer.removeListener('hud:state-update', listener)
+  },
+} satisfies HudAPI)
 
 export interface InstallStatus {
   phase: 'installing' | 'launching' | 'done' | 'failed'

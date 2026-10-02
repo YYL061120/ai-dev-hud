@@ -2,8 +2,8 @@
 
 | 阶段 | 交付 | 本轮状态 |
 | --- | --- | --- |
-| Phase 0 | fork/remotes、上游安装构建测试与真实运行、基线标签、代理/产品/架构/状态文档 | 正在验证 |
-| Phase 1 | Windows 右边缘 56 DIP Codex HUD、向左展开、已有数据和 Open Dashboard、Windows 实测 | 基线通过后开始 |
+| Phase 0 | fork/remotes、上游安装构建测试与真实运行、基线标签、代理/产品/架构/状态文档 | 完成，原始失败与独立修复已记录 |
+| Phase 1 | Windows 右边缘 56 DIP Codex HUD、向左展开、已有数据和 Open Dashboard、Windows 实测 | 核心验收通过，到达停止条件 |
 | 后续 | hover peek、自动启动、全屏隐藏、更丰富 usage dashboard | 本轮不实现 |
 | 后续 | 多设备 metadata 同步与设备/项目拆分 | 本轮不实现 |
 | 后续 | Codex Home / 新聊天 landing page | 本轮不实现 |

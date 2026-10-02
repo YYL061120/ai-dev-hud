@@ -6,6 +6,7 @@ const electron = require('electron')
 const path = require('path')
 
 const foreground = process.argv.includes('--foreground')
+const appArgs = process.argv.includes('--hud') ? ['--hud'] : []
 const aiusageDir = path.join(homedir(), '.aiusage')
 const pidPath = path.join(aiusageDir, 'widget.pid')
 
@@ -13,7 +14,7 @@ if (foreground) {
   // PM2 / service mode: run in foreground so the process manager can monitor it
   const child = spawn(
     String(electron),
-    [path.join(__dirname, '..', 'dist', 'main.js')],
+    [path.join(__dirname, '..', 'dist', 'main.js'), ...appArgs],
     { stdio: 'inherit' }
   )
   child.on('exit', (code) => process.exit(code ?? 0))
@@ -23,7 +24,7 @@ if (foreground) {
   // Normal mode: detach so closing the terminal doesn't kill the widget
   const child = spawn(
     String(electron),
-    [path.join(__dirname, '..', 'dist', 'main.js')],
+    [path.join(__dirname, '..', 'dist', 'main.js'), ...appArgs],
     { detached: true, stdio: 'ignore' }
   )
 

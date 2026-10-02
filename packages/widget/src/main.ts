@@ -6,6 +6,9 @@ import { createRequire } from 'node:module'
 import { EXCHANGE_RATE_SOURCE } from './currency'
 import type { ExchangeRateState } from './currency'
 import { queryWidgetData } from './data'
+import { queryHudData, unavailableHudData } from './hud-data'
+import { getHudBounds } from './hud-window'
+import type { HudState } from './hud-window'
 import { t } from './i18n'
 import { loadSettings, saveSettings } from './settings'
 import type { WidgetSettings } from './settings'
@@ -30,6 +33,9 @@ const WINDOW_WIDTH = 380
 const DEFAULT_WINDOW_HEIGHT = 500
 const MIN_WINDOW_HEIGHT = 320
 const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const HUD_MODE = process.platform === 'win32' && process.argv.includes('--hud')
+const LOCAL_CLI_ENTRY = join(__dirname, '..', '..', 'cli', 'dist', 'index.js')
+let hudState: HudState = { expanded: false, displayId: 0 }
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
@@ -40,7 +46,7 @@ let settings: WidgetSettings = loadSettings()
 let exchangeRate: ExchangeRateState = loadExchangeRateCache()
 let exchangeRatePromise: Promise<ExchangeRateState> | null = null
 
-app.setName('AIUsage Widget')
+app.setName(HUD_MODE ? 'AI Dev HUD' : 'AIUsage Widget')
 
 // Prevent dock icon on macOS
 if (process.platform === 'darwin' && app.dock) {
@@ -51,17 +57,39 @@ app.whenReady().then(async () => {
   const dbExists = existsSync(DB_PATH)
 
   if (dbExists) {
-    db = new Database(DB_PATH, {
-      readonly: true,
-      nativeBinding: getWidgetNativeBindingPath(__dirname),
-    })
+    try {
+      db = new Database(DB_PATH, {
+        readonly: true,
+        nativeBinding: getWidgetNativeBindingPath(__dirname),
+      })
+    } catch (error) {
+      if (!HUD_MODE) throw error
+      console.error('AI Dev HUD: local database unavailable')
+    }
   }
 
   applyTheme(settings.theme)
+  if (HUD_MODE) {
+    hudState.displayId = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+    screen.on('display-added', () => positionHud())
+    screen.on('display-removed', () => positionHud())
+    screen.on('display-metrics-changed', () => positionHud())
+  }
   createTray()
   createWindow()
   startAutoRefresh()
-  void refreshExchangeRate()
+  if (!HUD_MODE) void refreshExchangeRate()
+
+  if (HUD_MODE) {
+    showWindow()
+    // Existing AIUsage CLI owns ingestion. The renderer never reads logs.
+    if (!await isDashboardReachable(getDashboardPort())) {
+      const result = await launchDashboard()
+      if (!result.success) console.error('AI Dev HUD dashboard:', result.error)
+    }
+    pushDataUpdate()
+    return
+  }
 
   if (!dbExists) {
     await autoSetup()
@@ -86,7 +114,7 @@ function createTray(): void {
   const { buffer, scaleFactor } = getTrayIconNativeImage()
   const icon = nativeImage.createFromBuffer(buffer, scaleFactor ? { scaleFactor } : undefined)
   tray = new Tray(icon)
-  tray.setToolTip('AIUsage Widget')
+  tray.setToolTip(HUD_MODE ? 'AI Dev HUD · Codex' : 'AIUsage Widget')
 
   tray.on('click', () => toggleWindow())
   tray.on('right-click', () => {
@@ -95,6 +123,12 @@ function createTray(): void {
       { label: i18n.showPanel, click: () => showWindow() },
       { label: i18n.openDashboard, click: () => openDashboardAction() },
       { label: i18n.refresh, click: () => pushDataUpdate() },
+      ...(HUD_MODE ? [{ label: '显示器', submenu: screen.getAllDisplays().map((display, index) => ({
+        label: `${index + 1} · ${display.label || `${display.size.width} × ${display.size.height}`}`,
+        type: 'radio' as const,
+        checked: display.id === hudState.displayId,
+        click: () => { hudState.displayId = display.id; positionHud(); showWindow() },
+      })) }] : []),
       { type: 'separator' },
       { label: i18n.quit, click: () => { app.exit(0) } },
     ])
@@ -112,17 +146,19 @@ function createWindow(): void {
     skipTaskbar: true,
     alwaysOnTop: true,
     transparent: true,
+    ...(HUD_MODE ? { title: 'AI Dev HUD', backgroundColor: '#00000000', hasShadow: false } : {}),
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: HUD_MODE ? ['--ai-dev-hud'] : [],
     },
   })
 
   const rendererPath = join(__dirname, 'renderer', 'index.html')
   win.loadFile(rendererPath)
 
-  if (shouldHideWindowOnBlur(app.isPackaged)) {
+  if (!HUD_MODE && shouldHideWindowOnBlur(app.isPackaged)) {
     win.on('blur', () => win?.hide())
   }
 }
@@ -130,11 +166,32 @@ function createWindow(): void {
 function showWindow(): void {
   if (!win) return
 
-  positionWindowNearTray()
+  if (HUD_MODE) positionHud()
+  else positionWindowNearTray()
   win.show()
   win.focus()
   pushDataUpdate()
-  schedulePositionRetries()
+  if (!HUD_MODE) schedulePositionRetries()
+}
+
+function positionHud(): void {
+  if (!win) return
+  const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
+    ?? screen.getPrimaryDisplay()
+  hudState.displayId = display.id
+  win.setBounds(getHudBounds(display.workArea, hudState.expanded), false)
+  win.webContents.send('hud:state-update', hudState)
+}
+
+function getHudData() {
+  try {
+    if (!db && existsSync(DB_PATH)) {
+      db = new Database(DB_PATH, { readonly: true, nativeBinding: getWidgetNativeBindingPath(__dirname) })
+    }
+    return db ? queryHudData(db) : unavailableHudData('等待 AIUsage 解析本机用量…')
+  } catch {
+    return unavailableHudData('暂时无法读取本地用量，请确认 AIUsage 已完成解析。')
+  }
 }
 
 function showWindowWhenTrayReady(attempt = 0): void {
@@ -191,6 +248,10 @@ function toggleWindow(): void {
 }
 
 function pushDataUpdate(): void {
+  if (HUD_MODE) {
+    win?.webContents.send('hud:data-update', getHudData())
+    return
+  }
   if (!win || !db) return
   try {
     const data = queryWidgetData(db, settings.rangeDays)
@@ -206,6 +267,14 @@ function startAutoRefresh(): void {
 }
 
 async function openDashboardAction(): Promise<void> {
+  if (HUD_MODE) {
+    if (!await isDashboardReachable(getDashboardPort())) {
+      const result = await launchDashboard()
+      if (!result.success) throw new Error(result.error ?? '无法启动本地仪表盘，请先运行 pnpm.cmd build。')
+    }
+    await shell.openExternal(`http://127.0.0.1:${getDashboardPort()}`)
+    return
+  }
   const port = getDashboardPort()
   const reachable = await isDashboardReachable(port)
   if (!reachable) {
@@ -408,6 +477,16 @@ async function autoSetup(): Promise<void> {
 }
 
 // IPC handlers
+ipcMain.handle('hud:get-data', () => getHudData())
+ipcMain.handle('hud:get-state', () => hudState)
+ipcMain.handle('hud:set-expanded', (_event, expanded: boolean) => {
+  if (HUD_MODE && typeof expanded === 'boolean') {
+    hudState.expanded = expanded
+    positionHud()
+  }
+  return hudState
+})
+
 ipcMain.handle('widget:get-data', () => {
   if (!db) return null
   return queryWidgetData(db)
@@ -438,6 +517,7 @@ ipcMain.on('widget:hide-window', () => {
 })
 
 ipcMain.on('widget:resize-window', (_event, height: number) => {
+  if (HUD_MODE) return
   if (!win || !Number.isFinite(height)) return
 
   const bounds = win.getBounds()
@@ -459,7 +539,7 @@ function getDashboardPort(): number {
   try {
     if (existsSync(PORT_FILE)) {
       const port = parseInt(readFileSync(PORT_FILE, 'utf-8').trim(), 10)
-      if (!isNaN(port) && port > 0) return port
+      if (Number.isInteger(port) && port > 0 && port <= 65535) return port
     }
   } catch {}
   return DASHBOARD_PORT
@@ -481,10 +561,15 @@ async function launchDashboard(): Promise<{ success: boolean; error?: string }> 
   const { spawn } = nodeRequire('child_process') as typeof import('child_process')
 
   return new Promise((resolve) => {
-    const child = spawn('aiusage', ['serve'], {
+    if (HUD_MODE && !existsSync(LOCAL_CLI_ENTRY)) {
+      resolve({ success: false, error: '本地 AIUsage CLI 尚未构建，请运行 pnpm.cmd build。' })
+      return
+    }
+    const child = spawn(HUD_MODE ? 'node.exe' : 'aiusage', HUD_MODE ? [LOCAL_CLI_ENTRY, 'serve'] : ['serve'], {
       detached: true,
       stdio: 'ignore',
-      shell: true,
+      shell: !HUD_MODE,
+      windowsHide: true,
     })
 
     let failed = false

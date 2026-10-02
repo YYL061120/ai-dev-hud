@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter @juliantanx/aiusage dev",
     "dev:widget": "pnpm --filter @aiusage/core build && pnpm --filter @juliantanx/aiusage-widget dev",
     "start:widget": "pnpm --filter @juliantanx/aiusage-widget build && node packages/widget/bin/launcher.js",
+    "start:hud": "pnpm build && node packages/widget/bin/launcher.js --hud",
     "dev:site": "pnpm --filter @aiusage/site dev",
     "cli": "pnpm --dir packages/cli cli",
     "build:site": "pnpm --filter @aiusage/site build",

@@ -34,6 +34,7 @@ Codex parser 在 `packages/core/src/parsers/codex.ts`，跟踪 turn_context/mode
 
 Node CLI 和 Electron 的 Node ABI 不同。上游已给 Electron SQLite binding 单独 `dist/native`，不得把它当 Node CLI binding 使用。
 Windows 构建需用 Node `fs.rmSync` 代替 shell `rm -rf`。测试 fixture 需隔离 USERPROFILE，避免读到开发者 Cursor transcripts。
+全套 Windows 测试经独立 profile/AppData 运行。`prepare-native-binding.js` 用 Electron 真正加载 binding 验证 ABI，必要时复用上游 staged installer；`ensure-node-binding.js` 先验证 Node binding，避免 dashboard 运行时重复重建锁住的 DLL。
 
 本机验证用独立运行目录，child process 的测试 home 指向该目录，同时 `AIUSAGE_CODEX_PATH` / `AIUSAGE_CLAUDE_CODE_PATH` 指向只读现有来源。不复制原始日志，不修改另一实验，不上传 DB。
 产品正常运行沿用 AIUsage 的本地数据库；将来同步只经 replaceable sync adapter，不从 UI 发起原始内容同步。

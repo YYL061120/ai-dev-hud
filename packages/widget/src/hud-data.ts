@@ -21,11 +21,12 @@ const LOCAL_CODEX = "tool = 'codex' AND COALESCE(origin, 'local') = 'local'"
 
 export function getHudDateBounds(now = new Date()): { today: number; tomorrow: number; week: number } {
   // Calendar boundaries, rather than fixed 24-hour days, also handle DST.
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const week = new Date(today)
-  week.setDate(week.getDate() - 6)
+  const year = now.getFullYear(), month = now.getMonth(), day = now.getDate()
+  // A missing midnight can normalize to 01:00. Do not carry that hour
+  // into another date (e.g. Santiago's DST transition at midnight).
+  const today = new Date(year, month, day)
+  const tomorrow = new Date(year, month, day + 1)
+  const week = new Date(year, month, day - 6)
   return { today: today.getTime(), tomorrow: tomorrow.getTime(), week: week.getTime() }
 }
 

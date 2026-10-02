@@ -20,6 +20,8 @@ HUD 启动时选鼠标当前所在显示器。右键托盘图标 → 显示器�
 
 默认只读 AIUsage 的 `%USERPROFILE%\.aiusage\cache.db`。HUD 会启动本仓库构建好的 AIUsage CLI `serve`，由 CLI 增量解析，UI 不读取原始日志。后台 CLI 服务和 HUD 是独立进程；退出 HUD 后 dashboard 可继续运行。
 
+HUD 默认每 60 秒请求 CLI 刷新，即使 AIUsage 配置没有 refreshInterval 也会持续导入。展开面板与托盘的刷新会立即请求增量解析，再更新显示；失败会显示不可用状态。不会修改用户 CLI 的刷新间隔。端口被其他应用占用时 CLI 自动尝试下一端口，HUD 验证真实 AIUsage 页面/API 后才打开。
+
 ## 数据语义
 
 今日采用本机日历日，近 7 天包含今日及之前 6 个日历日。只展示本机 `origin=local` 的 `tool=codex` records。

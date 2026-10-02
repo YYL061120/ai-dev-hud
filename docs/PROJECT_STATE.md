@@ -47,30 +47,32 @@ Phase 0 门禁先通过后进入 Phase 1；产品修改前的侦察和计划见 
 - 主屏 scale 1.5：折叠 `{x:2504,y:588,width:56,height:216}`，展开 `{x:2184,y:428,width:376,height:536}`，右边界均为 2560。
 - 副屏 scale 1：折叠 `{x:3584,y:828,width:56,height:216}`，展开 `{x:3264,y:668,width:376,height:536}`，右边界均为 3640。
 - 两个真实 monitor 的选择回调均实测，窗口边界来自实际 BrowserWindow 与 screen API；Esc 折叠、托盘隐藏/恢复保留运行态通过。
-- Win32 只读 style 检查：没有 caption，topmost=true。`skipTaskbar=true` 为源代码配置证据，任务栏图标是否隐藏未单独视觉验证；不能用 WS_EX_TOOLWINDOW 位冒充这项验证。
+- Win32 只读枚举确认 HUD 窗口可见、没有 caption、topmost=true。两条实际任务栏的 UIAutomation 与截图确认 HUD 无窗口按钮；临时关闭本验收窗口 skipTaskbar 后出现 `Electron - 1 running window` 按钮，恢复后消失，阳性对照通过。圆角区域显示/隐藏时桌面像素相同、中央像素不同，确认透明合成。
 - 真实今日数与 `/api/summary?range=day&tool=codex` 的 tokens/sessions 一致。
 - 点击“打开仪表盘”实际调用系统 `shell.openExternal`；停止本任务启动的服务后，按钮实际启动 checkout 的 Node CLI，HTTP 200、Edge 页面正常、0 pageerrors。
 - Playwright Electron 验收脚本最后退出码 0。曾有控制器清理等待，测试所有者主动结束其控制器并修正 harness；没有改变产品退出行为或安全设置。
-- 最终 `pnpm.cmd build`：退出码 0；最终 `pnpm.cmd test`：1,056 passed、1 upstream skipped、0 failed，117 core / 32 web / 30 widget / 839 CLI / 38 site。
+- 审查修复后 `pnpm.cmd build`：退出码 0；`pnpm.cmd test`：1,064 passed、1 upstream skipped、0 failed，117 core / 32 web / 38 widget / 839 CLI / 38 site。
 - 最终代码上的原 dashboard/Codex/Claude/默认 widget 回归：退出码 0，HTTP 200、两 provider 非空记录、原 widget 可见并截图，0 pageerrors。
 - 构建后源码、private runtime/evidence 与 Git staging 边界已检查。没有提交或上传日志、私有 DB、原始提示词/回复或凭据。
 - HUD 实现 commit `a215492e6708a4c8e7371bccac5313a494c0eebe` 已推送到个人 origin。`git ls-remote` 验证开发分支与本地一致、main 仍为上游 `85b8687`，annotated `baseline-aiusage` 标签指向 `508aa09`。本状态文档的最终记录另作 docs commit；完整交付 HEAD 见 `git rev-parse HEAD` 和仓库外晨间报告。
 
 ## 限制与未完成
 
+独立审查三项已修复：定时/手动刷新请求现有 CLI parse API；Santiago 午夜 DST 分别构造边界；Dashboard 验证页面与所需 API 契约后才打开。安全隔离的合成日志实测：CLI 没有刷新间隔，默认 60 秒自动由 100 到 300 tokens；点击刷新到 600，API 一致。3847 被真实测试 404 服务占用时，CLI 在 3848 启动且按钮打开 3848，原 404 服务未受影响。未向用户来源写入合成记录。单测新增 Santiago 与 HTTP/API 契约回归，完整 build/tests 和最终双屏/冷启动/原功能回归退出 0。原任务栏 harness 曾只匹配窗口标题而漏掉实际 Electron 分组名称，修正读法并用阳性对照验证；不是跳过失败或修改产品以迎合断言。
+
 不做后续产品阶段：多设备 UI、Codex Home、Project Engine、Codex Launcher、AppBar、Unity/Unreal、自动启动、全屏隐藏、hover peek。
-未做安装包、Windows 热插拔实测、长时间稳定性测试；任务栏图标需手测。实际原始来源仍在被使用，历史缺失及模型价格缺失沿用上游限制。
+未做安装包、Windows 热插拔实测、长时间稳定性测试。实际原始来源仍在被使用，历史缺失及模型价格缺失沿用上游限制。任务栏两屏当前配置已实测；其他 Windows/任务栏配置仍需验证。
 验证数据保存在隔离的 `C:\AI-Tools\ai-dev-hud-runtime`，正常使用仍取用户 AIUsage 数据目录。两者不要混淆。操作未写入 `C:\AI-Tools\AI-usage-tracker`。
 
 ## 报告
 
 Implemented: 仓库/fork/remotes、验证后基线/标签、独立 Windows 修复、文档、最小 HUD、完整构建/测试和真实 Windows 验证。
 
-Not completed: 后续阶段、安装包、热插拔与长时间测试、任务栏视觉确认。
+Not completed: 后续阶段、安装包、热插拔与长时间测试。
 
-Files changed: AGENTS.md、docs/{PRD,ARCHITECTURE,PROJECT_STATE,ROADMAP,WINDOWS_HUD}.md、root package/test isolation runner、widget main/preload/launcher、HUD data/window/renderer、native helpers、HUD tests、Cursor fixture。
+Files changed: AGENTS.md、docs/{PRD,ARCHITECTURE,PROJECT_STATE,ROADMAP,WINDOWS_HUD}.md、root package/test isolation runner、widget main/preload/launcher、HUD data/window/renderer/dashboard-client、native helpers、HUD/API tests、Cursor fixture。
 
-Tests: 安装、最终 build/test、HUD 双屏/UI/API/cold launch、原 dashboard/provider/widget 回归均通过；原始失败和已存在的 skip 明确记录。
+Tests: 安装、最终 build/test、HUD 双屏/UI/API/cold launch、默认持续与手动增量导入、端口冲突、任务栏阳性对照/透明像素、原 dashboard/provider/widget 回归均通过；原始失败和已存在的 skip 明确记录。
 
 Three highest-priority manual tests:
 1. 两屏不同缩放下，使用真实托盘菜单切换，确认折叠/展开与贴边。

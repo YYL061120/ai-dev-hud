@@ -39,6 +39,14 @@ Windows 构建需用 Node `fs.rmSync` 代替 shell `rm -rf`。测试 fixture 需
 本机验证用独立运行目录，child process 的测试 home 指向该目录，同时 `AIUSAGE_CODEX_PATH` / `AIUSAGE_CLAUDE_CODE_PATH` 指向只读现有来源。不复制原始日志，不修改另一实验，不上传 DB。
 产品正常运行沿用 AIUsage 的本地数据库；将来同步只经 replaceable sync adapter，不从 UI 发起原始内容同步。
 
+## 审查后刷新与服务识别
+
+HUD 默认每 60 秒经主进程调用现有 `POST /api/refresh`，由 CLI 的写队列执行增量解析，然后推送 typed snapshot；按钮/托盘刷新也走同一路径。并发刷新和服务启动共用进行中的 Promise。不会改变用户 CLI 配置，也不依赖 config.refreshInterval 是否存在。原 widget 仍按原机制读取快照。
+
+`dashboard-client.ts` 使用本机 loopback，拒绝重定向。认定服务可用需同时满足：AIUsage 静态页面主题标记、有效 summary 结构、刷新 GET 的预期 405/METHOD_NOT_ALLOWED 契约。任何单独的 HTTP 200/404 都不足以认定服务；使用上游 CLI 的递增端口重试和 `.serve-port` 发现新端口，不停止占用端口的其他服务。这是对当前 1.5.19 页面/API 的适配，未来升级上游需重新验证契约。
+
+日期边界分别用年月日构造今日、明日、六天前的本地午夜，避免午夜 DST 归一到 01:00 后影响其他日期。
+
 ## 本轮不做
 
 新 dashboard、多设备 UI、Codex Home、Project Engine、Launcher、AppBar、自动启动、全屏隐藏、Unity/Unreal 集成。hover peek 是后续体验，MVP 采用显式展开。

@@ -9,6 +9,7 @@ import { queryWidgetData } from './data'
 import { queryHudData, unavailableHudData } from './hud-data'
 import { getHudBounds } from './hud-window'
 import type { HudState } from './hud-window'
+import { isDashboardReachable, refreshDashboard } from './dashboard-client'
 import { t } from './i18n'
 import { loadSettings, saveSettings } from './settings'
 import type { WidgetSettings } from './settings'
@@ -36,6 +37,8 @@ const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const HUD_MODE = process.platform === 'win32' && process.argv.includes('--hud')
 const LOCAL_CLI_ENTRY = join(__dirname, '..', '..', 'cli', 'dist', 'index.js')
 let hudState: HudState = { expanded: false, displayId: 0 }
+let hudRefreshPromise: Promise<ReturnType<typeof getHudData>> | null = null
+let dashboardLaunchPromise: Promise<{ success: boolean; error?: string }> | null = null
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
@@ -83,11 +86,7 @@ app.whenReady().then(async () => {
   if (HUD_MODE) {
     showWindow()
     // Existing AIUsage CLI owns ingestion. The renderer never reads logs.
-    if (!await isDashboardReachable(getDashboardPort())) {
-      const result = await launchDashboard()
-      if (!result.success) console.error('AI Dev HUD dashboard:', result.error)
-    }
-    pushDataUpdate()
+    await refreshHudData()
     return
   }
 
@@ -122,7 +121,7 @@ function createTray(): void {
     const menu = Menu.buildFromTemplate([
       { label: i18n.showPanel, click: () => showWindow() },
       { label: i18n.openDashboard, click: () => openDashboardAction() },
-      { label: i18n.refresh, click: () => pushDataUpdate() },
+      { label: i18n.refresh, click: () => { if (HUD_MODE) void refreshHudData(); else pushDataUpdate() } },
       ...(HUD_MODE ? [{ label: '显示器', submenu: screen.getAllDisplays().map((display, index) => ({
         label: `${index + 1} · ${display.label || `${display.size.width} × ${display.size.height}`}`,
         type: 'radio' as const,
@@ -263,7 +262,33 @@ function pushDataUpdate(): void {
 
 function startAutoRefresh(): void {
   if (refreshTimer) clearInterval(refreshTimer)
-  refreshTimer = setInterval(() => pushDataUpdate(), settings.refreshIntervalSec * 1000)
+  refreshTimer = setInterval(() => {
+    if (HUD_MODE) void refreshHudData()
+    else pushDataUpdate()
+  }, settings.refreshIntervalSec * 1000)
+}
+
+async function refreshHudData() {
+  if (hudRefreshPromise) return hudRefreshPromise
+  hudRefreshPromise = (async () => {
+    try {
+      if (!await isDashboardReachable(getDashboardPort())) {
+        const result = await launchDashboard()
+        if (!result.success) throw new Error(result.error ?? 'AIUsage 服务不可用')
+      }
+      // CLI ingestion and its serialized write queue own the logs and DB.
+      // This HUD cadence also works without a configured CLI refreshInterval.
+      await refreshDashboard(getDashboardPort())
+      const data = getHudData()
+      win?.webContents.send('hud:data-update', data)
+      return data
+    } catch (error) {
+      const data = unavailableHudData(error instanceof Error ? error.message : '用量刷新失败')
+      win?.webContents.send('hud:data-update', data)
+      return data
+    } finally { hudRefreshPromise = null }
+  })()
+  return hudRefreshPromise
 }
 
 async function openDashboardAction(): Promise<void> {
@@ -478,6 +503,7 @@ async function autoSetup(): Promise<void> {
 
 // IPC handlers
 ipcMain.handle('hud:get-data', () => getHudData())
+ipcMain.handle('hud:refresh', () => HUD_MODE ? refreshHudData() : getHudData())
 ipcMain.handle('hud:get-state', () => hudState)
 ipcMain.handle('hud:set-expanded', (_event, expanded: boolean) => {
   if (HUD_MODE && typeof expanded === 'boolean') {
@@ -545,19 +571,13 @@ function getDashboardPort(): number {
   return DASHBOARD_PORT
 }
 
-async function isDashboardReachable(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const http = nodeRequire('http') as typeof import('http')
-    const req = http.get(`http://localhost:${port}`, (res) => {
-      res.destroy()
-      resolve(res.statusCode !== undefined && res.statusCode < 500)
-    })
-    req.on('error', () => resolve(false))
-    req.setTimeout(200, () => { req.destroy(); resolve(false) })
-  })
+async function launchDashboard(): Promise<{ success: boolean; error?: string }> {
+  if (dashboardLaunchPromise) return dashboardLaunchPromise
+  dashboardLaunchPromise = startDashboard().finally(() => { dashboardLaunchPromise = null })
+  return dashboardLaunchPromise
 }
 
-async function launchDashboard(): Promise<{ success: boolean; error?: string }> {
+async function startDashboard(): Promise<{ success: boolean; error?: string }> {
   const { spawn } = nodeRequire('child_process') as typeof import('child_process')
 
   return new Promise((resolve) => {
@@ -565,7 +585,7 @@ async function launchDashboard(): Promise<{ success: boolean; error?: string }> 
       resolve({ success: false, error: '本地 AIUsage CLI 尚未构建，请运行 pnpm.cmd build。' })
       return
     }
-    const child = spawn(HUD_MODE ? 'node.exe' : 'aiusage', HUD_MODE ? [LOCAL_CLI_ENTRY, 'serve'] : ['serve'], {
+    const child = spawn(HUD_MODE ? 'node.exe' : 'aiusage', HUD_MODE ? [LOCAL_CLI_ENTRY, 'serve', '--port', String(getDashboardPort())] : ['serve'], {
       detached: true,
       stdio: 'ignore',
       shell: !HUD_MODE,

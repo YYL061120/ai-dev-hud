@@ -55,4 +55,18 @@ describe('Codex HUD data adapter', () => {
     const bounds = getHudDateBounds(new Date(2026, 2, 8, 12))
     expect(bounds.tomorrow - bounds.today).toBe(23 * 60 * 60 * 1000)
   })
+
+  it('does not carry a normalized 01:00 midnight into Santiago tomorrow or week boundaries', () => {
+    vi.stubEnv('TZ', 'America/Santiago')
+    const day = new Date(2026, 8, 6, 12)
+    const bounds = getHudDateBounds(day)
+    expect(new Date(bounds.today).getHours()).toBe(1)
+    expect(bounds.tomorrow).toBe(new Date(2026, 8, 7).getTime())
+    expect(bounds.week).toBe(new Date(2026, 7, 31).getTime())
+    insert('week-first-hour', new Date(2026, 7, 31, 0, 30).getTime())
+    insert('tomorrow-first-hour', new Date(2026, 8, 7, 0, 30).getTime())
+    const data = queryHudData(db, day)
+    expect(data.today.tokens).toBe(0)
+    expect(data.week.tokens).toBe(165)
+  })
 })

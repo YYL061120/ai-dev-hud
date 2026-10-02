@@ -22,7 +22,7 @@
     try { state = await api.setExpanded(expanded) } catch { error = '窗口暂时无法调整，请重试。' }
   }
   async function refresh() {
-    try { data = await api.getData(); error = '' } catch { error = '无法读取本地用量，请重试。' }
+    try { data = await api.refresh(); error = data.status === 'unavailable' ? (data.error ?? '用量刷新失败') : '' } catch { error = '用量刷新失败，请稍后重试。' }
     loading = false
   }
   async function openDashboard() {

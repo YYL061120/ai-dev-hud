@@ -8,6 +8,7 @@ import type { HudState } from './hud-window'
 export interface HudAPI {
   enabled: boolean
   getData: () => Promise<HudData>
+  refresh: () => Promise<HudData>
   getState: () => Promise<HudState>
   setExpanded: (expanded: boolean) => Promise<HudState>
   openDashboard: () => Promise<void>
@@ -18,6 +19,7 @@ export interface HudAPI {
 contextBridge.exposeInMainWorld('hud', {
   enabled: process.argv.includes('--ai-dev-hud'),
   getData: () => ipcRenderer.invoke('hud:get-data'),
+  refresh: () => ipcRenderer.invoke('hud:refresh'),
   getState: () => ipcRenderer.invoke('hud:get-state'),
   setExpanded: (expanded: boolean) => ipcRenderer.invoke('hud:set-expanded', expanded),
   openDashboard: () => ipcRenderer.invoke('widget:open-dashboard'),

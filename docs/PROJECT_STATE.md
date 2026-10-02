@@ -51,12 +51,14 @@ Phase 0 门禁先通过后进入 Phase 1；产品修改前的侦察和计划见 
 - 真实今日数与 `/api/summary?range=day&tool=codex` 的 tokens/sessions 一致。
 - 点击“打开仪表盘”实际调用系统 `shell.openExternal`；停止本任务启动的服务后，按钮实际启动 checkout 的 Node CLI，HTTP 200、Edge 页面正常、0 pageerrors。
 - Playwright Electron 验收脚本最后退出码 0。曾有控制器清理等待，测试所有者主动结束其控制器并修正 harness；没有改变产品退出行为或安全设置。
-- 审查修复后 `pnpm.cmd build`：退出码 0；`pnpm.cmd test`：1,064 passed、1 upstream skipped、0 failed，117 core / 32 web / 38 widget / 839 CLI / 38 site。
+- 认证分支最终修复后 `pnpm.cmd build`：退出码 0；`pnpm.cmd test`：1,068 passed、1 upstream skipped、0 failed，117 core / 32 web / 42 widget / 839 CLI / 38 site。
 - 最终代码上的原 dashboard/Codex/Claude/默认 widget 回归：退出码 0，HTTP 200、两 provider 非空记录、原 widget 可见并截图，0 pageerrors。
 - 构建后源码、private runtime/evidence 与 Git staging 边界已检查。没有提交或上传日志、私有 DB、原始提示词/回复或凭据。
 - HUD 实现 commit `a215492e6708a4c8e7371bccac5313a494c0eebe` 已推送到个人 origin。`git ls-remote` 验证开发分支与本地一致、main 仍为上游 `85b8687`，annotated `baseline-aiusage` 标签指向 `508aa09`。本状态文档的最终记录另作 docs commit；完整交付 HEAD 见 `git rev-parse HEAD` 和仓库外晨间报告。
 
 ## 限制与未完成
+
+认证分支复审已修复并实测：页面标记 + 公开 auth/status + 401/UNAUTHORIZED 识别需认证 AIUsage，区分无服务、无关服务与可用服务。原 widget 连续打开两次、HUD 打开与手动重查均为 0 额外 spawn、0 安装、0 解析 POST，自动周期暂停；系统浏览器打开已有 `/overview` 登录页，Edge 实际显示密码框。测试未提交密码，未修改密码/CLI 配置，使用独立随机测试凭据与隔离 profile；截图和 JSON 在仓库外 auth-verification 文件中。harness 最初在启动请求未完成时测量流量，多读一次；校正测量起点后保留所有断言通过。HUD 不共享浏览器 cookie，密码保护启用时后台解析保持暂停，这是本轮的明确边界。
 
 独立审查三项已修复：定时/手动刷新请求现有 CLI parse API；Santiago 午夜 DST 分别构造边界；Dashboard 验证页面与所需 API 契约后才打开。安全隔离的合成日志实测：CLI 没有刷新间隔，默认 60 秒自动由 100 到 300 tokens；点击刷新到 600，API 一致。3847 被真实测试 404 服务占用时，CLI 在 3848 启动且按钮打开 3848，原 404 服务未受影响。未向用户来源写入合成记录。单测新增 Santiago 与 HTTP/API 契约回归，完整 build/tests 和最终双屏/冷启动/原功能回归退出 0。原任务栏 harness 曾只匹配窗口标题而漏掉实际 Electron 分组名称，修正读法并用阳性对照验证；不是跳过失败或修改产品以迎合断言。
 
@@ -72,7 +74,7 @@ Not completed: 后续阶段、安装包、热插拔与长时间测试。
 
 Files changed: AGENTS.md、docs/{PRD,ARCHITECTURE,PROJECT_STATE,ROADMAP,WINDOWS_HUD}.md、root package/test isolation runner、widget main/preload/launcher、HUD data/window/renderer/dashboard-client、native helpers、HUD/API tests、Cursor fixture。
 
-Tests: 安装、最终 build/test、HUD 双屏/UI/API/cold launch、默认持续与手动增量导入、端口冲突、任务栏阳性对照/透明像素、原 dashboard/provider/widget 回归均通过；原始失败和已存在的 skip 明确记录。
+Tests: 安装、最终 build/test、HUD 双屏/UI/API/cold launch、默认持续与手动增量导入、端口冲突、任务栏阳性对照/透明像素、原 dashboard/provider/widget 回归、原 widget/HUD 密码保护服务回归均通过；原始失败和已存在的 skip 明确记录。
 
 Three highest-priority manual tests:
 1. 两屏不同缩放下，使用真实托盘菜单切换，确认折叠/展开与贴边。

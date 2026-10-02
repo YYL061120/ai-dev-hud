@@ -9,7 +9,7 @@ import { queryWidgetData } from './data'
 import { queryHudData, unavailableHudData } from './hud-data'
 import { getHudBounds } from './hud-window'
 import type { HudState } from './hud-window'
-import { isDashboardReachable, refreshDashboard } from './dashboard-client'
+import { isDashboardReachable, probeDashboard, refreshDashboard } from './dashboard-client'
 import { t } from './i18n'
 import { loadSettings, saveSettings } from './settings'
 import type { WidgetSettings } from './settings'
@@ -39,6 +39,8 @@ const LOCAL_CLI_ENTRY = join(__dirname, '..', '..', 'cli', 'dist', 'index.js')
 let hudState: HudState = { expanded: false, displayId: 0 }
 let hudRefreshPromise: Promise<ReturnType<typeof getHudData>> | null = null
 let dashboardLaunchPromise: Promise<{ success: boolean; error?: string }> | null = null
+let hudAuthenticationPort: number | null = null
+const HUD_AUTH_MESSAGE = 'Dashboard 需要登录。HUD 自动解析已暂停；请打开仪表盘使用现有登录页。'
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
@@ -121,7 +123,7 @@ function createTray(): void {
     const menu = Menu.buildFromTemplate([
       { label: i18n.showPanel, click: () => showWindow() },
       { label: i18n.openDashboard, click: () => openDashboardAction() },
-      { label: i18n.refresh, click: () => { if (HUD_MODE) void refreshHudData(); else pushDataUpdate() } },
+      { label: i18n.refresh, click: () => { if (HUD_MODE) void refreshHudData(true); else pushDataUpdate() } },
       ...(HUD_MODE ? [{ label: '显示器', submenu: screen.getAllDisplays().map((display, index) => ({
         label: `${index + 1} · ${display.label || `${display.size.width} × ${display.size.height}`}`,
         type: 'radio' as const,
@@ -183,6 +185,7 @@ function positionHud(): void {
 }
 
 function getHudData() {
+  if (HUD_MODE && hudAuthenticationPort === getDashboardPort()) return unavailableHudData(HUD_AUTH_MESSAGE)
   try {
     if (!db && existsSync(DB_PATH)) {
       db = new Database(DB_PATH, { readonly: true, nativeBinding: getWidgetNativeBindingPath(__dirname) })
@@ -268,14 +271,23 @@ function startAutoRefresh(): void {
   }, settings.refreshIntervalSec * 1000)
 }
 
-async function refreshHudData() {
+async function refreshHudData(force = false) {
   if (hudRefreshPromise) return hudRefreshPromise
+  if (!force && hudAuthenticationPort === getDashboardPort()) return unavailableHudData(HUD_AUTH_MESSAGE)
   hudRefreshPromise = (async () => {
     try {
-      if (!await isDashboardReachable(getDashboardPort())) {
+      hudAuthenticationPort = null
+      let status = await probeDashboard(getDashboardPort())
+      if (status !== 'ready' && status !== 'auth-required') {
         const result = await launchDashboard()
         if (!result.success) throw new Error(result.error ?? 'AIUsage 服务不可用')
+        status = await probeDashboard(getDashboardPort())
       }
+      if (status === 'auth-required') {
+        hudAuthenticationPort = getDashboardPort()
+        throw new Error(HUD_AUTH_MESSAGE)
+      }
+      if (status !== 'ready') throw new Error('AIUsage 服务不可用')
       // CLI ingestion and its serialized write queue own the logs and DB.
       // This HUD cadence also works without a configured CLI refreshInterval.
       await refreshDashboard(getDashboardPort())
@@ -297,7 +309,7 @@ async function openDashboardAction(): Promise<void> {
       const result = await launchDashboard()
       if (!result.success) throw new Error(result.error ?? '无法启动本地仪表盘，请先运行 pnpm.cmd build。')
     }
-    await shell.openExternal(`http://127.0.0.1:${getDashboardPort()}`)
+    await openVerifiedDashboardPage()
     return
   }
   const port = getDashboardPort()
@@ -334,7 +346,16 @@ async function openDashboardAction(): Promise<void> {
       notifyRenderer('install:status', { phase: 'done' })
     }
   }
-  shell.openExternal(`http://localhost:${getDashboardPort()}`)
+  await openVerifiedDashboardPage()
+}
+
+async function openVerifiedDashboardPage(): Promise<void> {
+  const port = getDashboardPort()
+  const status = await probeDashboard(port)
+  if (status !== 'ready' && status !== 'auth-required') throw new Error('AIUsage 服务不可用')
+  // The existing protected overview route displays AIUsage's login page.
+  // Browser authentication remains in that browser, never in HUD IPC.
+  await shell.openExternal(`http://127.0.0.1:${port}${status === 'auth-required' ? '/overview' : ''}`)
 }
 
 function notifyRenderer(channel: string, payload: Record<string, unknown>): void {
@@ -503,7 +524,7 @@ async function autoSetup(): Promise<void> {
 
 // IPC handlers
 ipcMain.handle('hud:get-data', () => getHudData())
-ipcMain.handle('hud:refresh', () => HUD_MODE ? refreshHudData() : getHudData())
+ipcMain.handle('hud:refresh', () => HUD_MODE ? refreshHudData(true) : getHudData())
 ipcMain.handle('hud:get-state', () => hudState)
 ipcMain.handle('hud:set-expanded', (_event, expanded: boolean) => {
   if (HUD_MODE && typeof expanded === 'boolean') {

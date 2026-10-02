@@ -43,7 +43,9 @@ Windows 构建需用 Node `fs.rmSync` 代替 shell `rm -rf`。测试 fixture 需
 
 HUD 默认每 60 秒经主进程调用现有 `POST /api/refresh`，由 CLI 的写队列执行增量解析，然后推送 typed snapshot；按钮/托盘刷新也走同一路径。并发刷新和服务启动共用进行中的 Promise。不会改变用户 CLI 配置，也不依赖 config.refreshInterval 是否存在。原 widget 仍按原机制读取快照。
 
-`dashboard-client.ts` 使用本机 loopback，拒绝重定向。认定服务可用需同时满足：AIUsage 静态页面主题标记、有效 summary 结构、刷新 GET 的预期 405/METHOD_NOT_ALLOWED 契约。任何单独的 HTTP 200/404 都不足以认定服务；使用上游 CLI 的递增端口重试和 `.serve-port` 发现新端口，不停止占用端口的其他服务。这是对当前 1.5.19 页面/API 的适配，未来升级上游需重新验证契约。
+`dashboard-client.ts` 使用本机 loopback，拒绝重定向。状态区分 ready、auth-required、absent、unrelated、unavailable。先核验 AIUsage 静态页面主题标记及公开 `/api/auth/status` 布尔结构；无须认证时还核验 summary 结构与刷新 GET 的 405/METHOD_NOT_ALLOWED 契约。需认证时必须同时满足 enabled=true、authenticated=false、summary 返回 401/UNAUTHORIZED，任意 401 不足以识别 AIUsage。原 widget/HUD 可打开已有 `/overview` 登录页；HUD 暂停自动探测/解析直到手动重查或端口变化，不重复启动/安装服务，不索取或传递密码及浏览器 cookie。
+
+使用上游 CLI 的递增端口重试和 `.serve-port` 发现新端口，不停止占用端口的其他服务。这是对当前 1.5.19 页面/API 的适配，未来升级上游需重新验证契约。
 
 日期边界分别用年月日构造今日、明日、六天前的本地午夜，避免午夜 DST 归一到 01:00 后影响其他日期。
 

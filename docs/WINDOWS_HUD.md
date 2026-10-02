@@ -16,7 +16,11 @@ node packages/widget/bin/launcher.js --hud
 
 前台调试用 `--foreground --hud`。原 widget 保持 `pnpm.cmd start:widget` / `node packages/widget/bin/launcher.js`。
 
-HUD 启动时选鼠标当前所在显示器。右键托盘图标 → 显示器，可切换目标。展开/折叠按钮位于右侧窄条底部；Esc 折叠；点击托盘图标隐藏/恢复并保留本次运行状态。右键托盘的 Quit 退出。
+HUD 启动时选鼠标当前所在显示器，默认完全隐藏。在该屏幕右边缘、屏幕中间约 216 DIP 高的区域停留约 140ms，窄条向左滑入。展开后触发高度约 536 DIP；离开面板后约 450ms 缓冲再收回，短暂返回取消收回，动画中返回可连续反向。右侧 4 DIP 触发条保持点击穿透；悬停不抢焦点。
+
+右键托盘图标 → 显示器，可切换目标，换屏后等待新的边缘悬停。展开/折叠按钮位于窄条底部；Esc 折叠；点击托盘图标禁用/恢复边缘唤起，保留本次展开态和目标屏幕。右键“启用边缘唤起”也可恢复，Quit 退出。
+
+动画在固定右缘窗口内部裁切，保留原圆角、窄条和展开布局。跨不同 DPI 显示器时，短暂复核原生窗口尺寸，修正 Windows 异步调整；不改变系统 DPI 或桌面设置。
 
 默认只读 AIUsage 的 `%USERPROFILE%\.aiusage\cache.db`。HUD 会启动本仓库构建好的 AIUsage CLI `serve`，由 CLI 增量解析，UI 不读取原始日志。后台 CLI 服务和 HUD 是独立进程；退出 HUD 后 dashboard 可继续运行。
 

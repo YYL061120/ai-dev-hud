@@ -4,7 +4,8 @@
 | --- | --- | --- |
 | Phase 0 | fork/remotes、上游安装构建测试与真实运行、基线标签、代理/产品/架构/状态文档 | 完成，原始失败与独立修复已记录 |
 | Phase 1 | Windows 右边缘 56 DIP Codex HUD、向左展开、已有数据和 Open Dashboard、Windows 实测 | 核心验收通过，到达停止条件 |
-| 后续 | hover peek、自动启动、全屏隐藏、更丰富 usage dashboard | 本轮不实现 |
+| Phase 1 用户追加 | 边缘悬停滑入/收回、原 Dashboard 明显中英切换与持久化 | HUD 已实测通过；网页语言正在验收 |
+| 后续 | 更丰富 hover 摘要、自动启动、全屏隐藏、更丰富 usage dashboard | 本轮不实现 |
 | 后续 | 多设备 metadata 同步与设备/项目拆分 | 本轮不实现 |
 | 后续 | Codex Home / 新聊天 landing page | 本轮不实现 |
 | 后续 | Project Engine / context metadata | 本轮不实现 |

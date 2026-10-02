@@ -9,6 +9,7 @@ import { queryWidgetData } from './data'
 import { queryHudData, unavailableHudData } from './hud-data'
 import { getHudBounds } from './hud-window'
 import type { HudState } from './hud-window'
+import { HudHoverController } from './hud-hover'
 import { isDashboardReachable, probeDashboard, refreshDashboard } from './dashboard-client'
 import { t } from './i18n'
 import { loadSettings, saveSettings } from './settings'
@@ -36,7 +37,11 @@ const MIN_WINDOW_HEIGHT = 320
 const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const HUD_MODE = process.platform === 'win32' && process.argv.includes('--hud')
 const LOCAL_CLI_ENTRY = join(__dirname, '..', '..', 'cli', 'dist', 'index.js')
-let hudState: HudState = { expanded: false, displayId: 0 }
+let hudState: HudState = { expanded: false, displayId: 0, reveal: 0, hoverEnabled: true }
+const hudHover = new HudHoverController()
+let hudPollTimer: ReturnType<typeof setTimeout> | null = null
+let hudPositionTimers: ReturnType<typeof setTimeout>[] = []
+let hudMouseIgnored = true
 let hudRefreshPromise: Promise<ReturnType<typeof getHudData>> | null = null
 let dashboardLaunchPromise: Promise<{ success: boolean; error?: string }> | null = null
 let hudAuthenticationPort: number | null = null
@@ -76,9 +81,9 @@ app.whenReady().then(async () => {
   applyTheme(settings.theme)
   if (HUD_MODE) {
     hudState.displayId = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
-    screen.on('display-added', () => positionHud())
-    screen.on('display-removed', () => positionHud())
-    screen.on('display-metrics-changed', () => positionHud())
+    screen.on('display-added', () => positionHud(true))
+    screen.on('display-removed', () => positionHud(true))
+    screen.on('display-metrics-changed', () => positionHud(true))
   }
   createTray()
   createWindow()
@@ -86,7 +91,8 @@ app.whenReady().then(async () => {
   if (!HUD_MODE) void refreshExchangeRate()
 
   if (HUD_MODE) {
-    showWindow()
+    positionHud(true)
+    startHudPointerWatch()
     // Existing AIUsage CLI owns ingestion. The renderer never reads logs.
     await refreshHudData()
     return
@@ -104,6 +110,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  if (hudPollTimer) clearTimeout(hudPollTimer)
+  for (const timer of hudPositionTimers) clearTimeout(timer)
   db?.close()
 })
 
@@ -121,14 +129,14 @@ function createTray(): void {
   tray.on('right-click', () => {
     const i18n = t(settings.locale)
     const menu = Menu.buildFromTemplate([
-      { label: i18n.showPanel, click: () => showWindow() },
+      { label: HUD_MODE ? '启用边缘唤起' : i18n.showPanel, click: () => showWindow() },
       { label: i18n.openDashboard, click: () => openDashboardAction() },
       { label: i18n.refresh, click: () => { if (HUD_MODE) void refreshHudData(true); else pushDataUpdate() } },
       ...(HUD_MODE ? [{ label: '显示器', submenu: screen.getAllDisplays().map((display, index) => ({
         label: `${index + 1} · ${display.label || `${display.size.width} × ${display.size.height}`}`,
         type: 'radio' as const,
         checked: display.id === hudState.displayId,
-        click: () => { hudState.displayId = display.id; positionHud(); showWindow() },
+        click: () => { hudState.displayId = display.id; positionHud(true); showWindow() },
       })) }] : []),
       { type: 'separator' },
       { label: i18n.quit, click: () => { app.exit(0) } },
@@ -158,6 +166,7 @@ function createWindow(): void {
 
   const rendererPath = join(__dirname, 'renderer', 'index.html')
   win.loadFile(rendererPath)
+  if (HUD_MODE) win.setIgnoreMouseEvents(true)
 
   if (!HUD_MODE && shouldHideWindowOnBlur(app.isPackaged)) {
     win.on('blur', () => win?.hide())
@@ -167,21 +176,67 @@ function createWindow(): void {
 function showWindow(): void {
   if (!win) return
 
-  if (HUD_MODE) positionHud()
-  else positionWindowNearTray()
+  if (HUD_MODE) {
+    hudHover.setEnabled(true)
+    hudState.hoverEnabled = true
+    win.webContents.send('hud:state-update', hudState)
+    pushDataUpdate()
+    return
+  }
+  positionWindowNearTray()
   win.show()
   win.focus()
   pushDataUpdate()
   if (!HUD_MODE) schedulePositionRetries()
 }
 
-function positionHud(): void {
+function positionHud(resetReveal = false): void {
   if (!win) return
   const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
     ?? screen.getPrimaryDisplay()
   hudState.displayId = display.id
-  win.setBounds(getHudBounds(display.workArea, hudState.expanded), false)
+  if (resetReveal) {
+    hudHover.reset()
+    hudState.reveal = 0
+    win.setIgnoreMouseEvents(true)
+    hudMouseIgnored = true
+    win.hide()
+  }
+  const bounds = getHudBounds(display.workArea, hudState.expanded)
+  win.setBounds(bounds, false)
+  // Windows can asynchronously resize the HWND after a cross-DPI move.
+  // Reapply only mismatched bounds, without revealing or focusing the HUD.
+  for (const timer of hudPositionTimers) clearTimeout(timer)
+  hudPositionTimers = [80, 200, 500].map(delay => setTimeout(() => {
+    if (!win || win.isDestroyed()) return
+    const actual = win.getBounds()
+    if (actual.x !== bounds.x || actual.y !== bounds.y || actual.width !== bounds.width || actual.height !== bounds.height) {
+      win.setBounds(bounds, false)
+    }
+  }, delay))
   win.webContents.send('hud:state-update', hudState)
+}
+
+function startHudPointerWatch(): void {
+  if (hudPollTimer) clearTimeout(hudPollTimer)
+  const tick = () => {
+    if (!win || win.isDestroyed()) return
+    const frame = hudHover.step(performance.now(), screen.getCursorScreenPoint(), win.getBounds())
+    const ignoreMouse = !frame.interactive
+    if (hudMouseIgnored !== ignoreMouse) {
+      hudMouseIgnored = ignoreMouse
+      win.setIgnoreMouseEvents(hudMouseIgnored)
+    }
+    if (Math.abs(hudState.reveal - frame.reveal) > 0.00001) {
+      hudState.reveal = frame.reveal
+      win.webContents.send('hud:state-update', hudState)
+    }
+    if (frame.visible && !win.isVisible()) win.showInactive()
+    else if (!frame.visible && win.isVisible()) win.hide()
+    // Keep idle monitoring inexpensive; animate at the display frame cadence.
+    hudPollTimer = setTimeout(tick, frame.visible ? 16 : 40)
+  }
+  tick()
 }
 
 function getHudData() {
@@ -242,6 +297,12 @@ function schedulePositionRetries(): void {
 }
 
 function toggleWindow(): void {
+  if (HUD_MODE) {
+    hudHover.setEnabled(!hudHover.enabled)
+    hudState.hoverEnabled = hudHover.enabled
+    win?.webContents.send('hud:state-update', hudState)
+    return
+  }
   if (win?.isVisible()) {
     win.hide()
   } else {
@@ -560,6 +621,12 @@ ipcMain.handle('widget:save-settings', (_event, newSettings: WidgetSettings) => 
 })
 
 ipcMain.on('widget:hide-window', () => {
+  if (HUD_MODE) {
+    hudHover.setEnabled(false)
+    hudState.hoverEnabled = false
+    win?.webContents.send('hud:state-update', hudState)
+    return
+  }
   win?.hide()
 })
 

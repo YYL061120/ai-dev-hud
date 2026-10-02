@@ -9,7 +9,7 @@
     status: 'unavailable', today: { tokens: 0, sessions: 0, usageRecords: 0, cost: 0 },
     week: { tokens: 0, sessions: 0, usageRecords: 0, cost: 0 }, models: [], updatedAt: 0,
   }
-  let state: HudState = { expanded: false, displayId: 0 }
+  let state: HudState = { expanded: false, displayId: 0, reveal: 0, hoverEnabled: true }
   let error = ''
   let opening = false
   let loading = true
@@ -51,7 +51,7 @@
 
 <svelte:window on:keydown={(event) => { if (event.key === 'Escape') void expand(false) }} />
 
-<main class:expanded={state.expanded} aria-label="AI Dev HUD · Codex 本机用量">
+<main class:expanded={state.expanded} style:transform={`translateX(${(1 - state.reveal) * 100}%)`} aria-hidden={state.reveal === 0} aria-label="AI Dev HUD · Codex 本机用量">
   {#if state.expanded}
     <section class="summary" data-testid="hud-summary">
       <header><div><span class="eyebrow">AI DEV HUD</span><h1>Codex 用量</h1></div><span class="local"><i></i>本机</span></header>
@@ -77,7 +77,7 @@
   :global(body.hud-mode *) { box-sizing: border-box; }
   :global(html.hud-mode), :global(body.hud-mode), :global(body.hud-mode #app) { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
   :global(body.hud-mode) { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; color: #e5ecee; user-select: none; }
-  main { width: 100%; height: 100%; display: flex; background: #131c25f5; border: 1px solid #34414a; border-right: 0; border-radius: 13px 0 0 13px; overflow: hidden; }
+  main { width: 100%; height: 100%; display: flex; background: #131c25f5; border: 1px solid #34414a; border-right: 0; border-radius: 13px 0 0 13px; overflow: hidden; will-change: transform; }
   button { font: inherit; cursor: pointer; border: 0; }
   button:focus-visible { outline: 2px solid #62dfb9; outline-offset: -3px; }
   .rail { width: 55px; flex: 0 0 55px; height: 100%; display: flex; align-items: center; flex-direction: column; padding: 16px 3px 9px; }

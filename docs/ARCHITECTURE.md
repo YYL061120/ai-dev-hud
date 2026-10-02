@@ -51,4 +51,10 @@ HUD 默认每 60 秒经主进程调用现有 `POST /api/refresh`，由 CLI 的�
 
 ## 本轮不做
 
-新 dashboard、多设备 UI、Codex Home、Project Engine、Launcher、AppBar、自动启动、全屏隐藏、Unity/Unreal 集成。hover peek 是后续体验，MVP 采用显式展开。
+新 dashboard、多设备 UI、Codex Home、Project Engine、Launcher、AppBar、自动启动、全屏隐藏、Unity/Unreal 集成。当前追加实现边缘唤起原窄条，详细摘要仍由显式展开控制。
+
+## 用户追加的边缘动画适配
+
+`hud-hover.ts` 是纯时间驱动状态机：全局 DIP 指针和目标窗口矩形输入，输出 reveal/visible/interactive，不接触 provider 或存储。边缘进入 140ms、离开 450ms 缓冲，临界阻尼保留反向速度并收敛到 0/1。main 在隐藏时约 40ms、显示/动画时约 16ms 轮询；仅 showInactive，不调用 focus，隐藏后 HWND 也 hide。指针不在露出的内容区或位于右缘 4 DIP 时，原生窗口忽略鼠标事件。
+
+renderer 经现有 typed IPC 接收 reveal，translateX 在原透明 HWND 内裁切；窗口右缘不移动，避免相邻显示器显示离屏内容。显示器变化重置 reveal；展开偏好保持。真实 150%→100% 换屏发现 Windows 异步宽度调整，main 在 80/200/500ms 仅修正偏离目标的 bounds，取消旧复核，退出时清理 timer。

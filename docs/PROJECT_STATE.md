@@ -4,9 +4,18 @@
 
 ## 用户追加工作进行中
 
-用户明确授权边缘悬停滑入/收回和 Dashboard 中英文可见切换。当前分支原工作区干净；已查看实际 Library 参考图，是现有 Codex 窄条，保持外观。截图已通过当前 Library 助手取到 Windows，身份属性经 NTFS 命名流写入/校验，保存在仓库外。HUD 新增时间驱动的临界阻尼动画与边缘进入/离开缓冲；网页复用已有字典。实现与真实 Windows/UI 验证未完成，不能把代码编辑视为验收。
+用户明确授权边缘悬停滑入/收回和 Dashboard 中英文可见切换。起始工作区干净；已实际查看 Library 参考图，是现有 Codex 窄条，保持外观。截图经当前 Library 助手取到 Windows，身份属性经 NTFS 命名流写入/校验，保存于仓库外。HUD 实现与真实双屏验收已完成；网页复用已有字典，GUI 验证进行中。
 
 追加工作门禁：完整构建通过；完整测试最初在 Windows 沙箱失败，原因是上游 Grok fixture 硬编码 `/tmp`，实际落到不可写的 `C:\tmp`。改为系统 tmpdir 下 mkdtemp 创建的独占目录，仅清理本用例创建的目录；保留全部断言，无新增 skip。修复后 `pnpm.cmd test` 通过：1,083 passed、1 个上游 skip、0 failed，120 个测试文件（core 117 / web 39 / widget 50 / CLI 839 / site 38）。HUD 真实双屏边缘验收已通过；网页语言 GUI 仍在验证。
+
+### 边缘 HUD：已验收
+
+- 默认 reveal=0、原生窗口不可见；140ms 边缘停留后连续滑入，450ms 离开缓冲后收回。临界阻尼可反向，圆角/窄条/展开内容沿用原布局，窗口内裁切。
+- `node C:\AI-Tools\.ai-dev-hud-tools\verify-hover.cjs`：exit 0，实际 Windows Electron，两个显示器 scaleFactor=1.5/1。两屏 collapsed=56×216 DIP、expanded=376×536 DIP，右缘正确；实际物理鼠标转 DIP 逐次核对，悬停前后 Win32 foreground 保持，HUD 未聚焦。
+- 每屏原生边缘点击实际传到测试背景 DOM（有普通内容点击阳性对照）；三轮短暂离开/返回、关闭中反向、托盘暂停/恢复、动画中换屏均通过。保留展开偏好；Today fixture=120，Open Dashboard 实际 shell.openExternal 返回正确独占端口且 HTTP 200，0 pageerrors。
+- 混合 DPI 实测发现隐藏窗口跨屏后宽度变成 48 DIP；加入有限 bounds 复核后，两屏均稳定为 56 DIP。未修改系统 DPI、显示器排列或安全设置。
+- 验证 harness 修正：输入助手启用线程 DPI awareness；背景测试窗口移除 resize 边框；显式轮询等待异步 IPC 条件；用本地编译输入助手减少进程启动延迟。没有删除产品断言。已核对并暂时停止原旧版项目 HUD（PID 47132）避免叠窗；交付前应恢复新版实例。
+- 证据：仓库外 `hover-verification.json`、`hover-verification.log`、`hover-collapsed-<displayId>.png`、`hover-expanded-<displayId>.png`。实际查看截图确认原布局。未实测物理拔插显示器、系统睡眠/唤醒和全屏交互；负坐标由单测覆盖。显示器菜单经真实 Tray Menu 的回调选择，未模拟实体鼠标点击托盘菜单。
 
 ## 仓库
 

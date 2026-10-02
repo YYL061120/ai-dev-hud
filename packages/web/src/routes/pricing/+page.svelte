@@ -576,7 +576,7 @@
           </button>
         {/if}
         {#if !recalcActive}
-          <button class="recalc-close" type="button" on:click={dismissRecalcPanel} aria-label="Close">×</button>
+          <button class="recalc-close" type="button" on:click={dismissRecalcPanel} aria-label={$t('common.close')}>×</button>
         {/if}
       </div>
     </div>

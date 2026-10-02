@@ -1,7 +1,7 @@
 <script>
   import { dateRange, selectedDevice, selectedTool, formatTokens, formatNumber, formatCost } from '$lib/stores.js'
   import { fetchModels } from '$lib/api.js'
-  import { t } from '$lib/i18n.js'
+  import { t, lang } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
   import DeviceSelector from '$lib/components/DeviceSelector.svelte'
   import ToolSelector from '$lib/components/ToolSelector.svelte'
@@ -162,7 +162,7 @@
             </span>
             <span class="stat-item">
               <span class="stat-label">{$t('models.calls')}</span>
-              <span class="mono stat-value">{formatNumber(model.callCount)}</span>
+              <span class="mono stat-value">{formatNumber(model.callCount, $lang)}</span>
             </span>
             <span class="stat-item">
               <span class="stat-label">{$t('models.share')}</span>

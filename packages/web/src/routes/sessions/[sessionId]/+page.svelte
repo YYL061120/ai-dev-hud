@@ -1,17 +1,13 @@
 <script>
   import { page } from '$app/stores'
   import { onMount } from 'svelte'
-  import { formatCost, formatTokens } from '$lib/stores.js'
+  import { formatCost, formatTokens, formatDateTime } from '$lib/stores.js'
   import { fetchSessionDetail } from '$lib/api.js'
-  import { t } from '$lib/i18n.js'
+  import { t, lang } from '$lib/i18n.js'
 
   let data = null
   let error = null
   let loading = true
-
-  function formatDateTime(ts) {
-    return new Date(ts).toLocaleString()
-  }
 
   function formatDuration(ms) {
     if (!ms || ms < 1000) return '< 1s'
@@ -124,7 +120,7 @@
         <span class="id-tool">{session.tool}</span>
         <span class="id-model mono">{session.model}</span>
       </div>
-      <div class="id-time mono">{formatDateTime(session.firstTs)}</div>
+      <div class="id-time mono">{formatDateTime(session.firstTs, $lang)}</div>
       {#if session.cwd}
         <div class="id-path mono" title={session.cwd}>{session.cwd}</div>
       {/if}

@@ -50,3 +50,7 @@ $env:PATH = 'C:\AI-Tools\.ai-dev-hud-tools\node_modules\.bin;' + $env:PATH
 ## 验证证据
 
 详细记录见 PROJECT_STATE.md。私人数据、自动化脚本、日志和截图保存在仓库外 `C:\AI-Tools\ai-dev-hud-evidence`，不推送远端。
+
+## 仪表盘语言
+
+打开已有 Dashboard 后，在页面右上方选择“中文”或“English”。侧栏收起和移动窗口时入口仍显示；密码登录页也可切换。浏览器会记住选择，刷新及访问其他页面沿用同一语言。切换保留日期/工具筛选；模型名、provider 和项目路径保持原数据。货币设置仍在原设置页独立控制。

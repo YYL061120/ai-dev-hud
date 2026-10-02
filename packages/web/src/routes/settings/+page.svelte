@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { t } from '$lib/i18n.js'
+  import { t, lang, getLocale } from '$lib/i18n.js'
   import { fetchConfig, saveConfig, fetchCredentialStatus, fetchDetectedTools, importKelivoBackup, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync, fetchCloudSyncStatus } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
   import { splitSettingsSources } from '$lib/settings-sources.js'
@@ -139,14 +139,14 @@
 
   $: cachedRateUsdToCny = cachedRate ? (1 / cachedRate).toFixed(2) : ''
   $: rateLastUpdated = cachedRateFetchedAt
-    ? new Date(cachedRateFetchedAt).toLocaleString()
+    ? new Date(cachedRateFetchedAt).toLocaleString(getLocale($lang))
     : null
   $: kelivoTool = detectedTools.find(tool => tool.sourceKey === 'kelivo')
   $: kelivoLastImportedAt = typeof kelivoTool?.lastImportedAt === 'number'
     ? new Date(kelivoTool.lastImportedAt)
     : null
   $: kelivoStatus = kelivoLastImportedAt
-    ? `${$t('settings.lastImported')} ${kelivoLastImportedAt.toLocaleString()}`
+    ? `${$t('settings.lastImported')} ${kelivoLastImportedAt.toLocaleString(getLocale($lang))}`
     : $t('settings.neverImported')
 
   // Per-section save state
@@ -332,10 +332,10 @@
     }
   }
 
-  function formatSyncTime(ts) {
+  function formatSyncTime(ts, language) {
     if (!ts) return $t('settings.syncNever')
     const d = new Date(ts)
-    return d.toLocaleString()
+    return d.toLocaleString(getLocale(language))
   }
 
   async function saveGeneral() {
@@ -727,7 +727,7 @@
               <option value="cloud">AIUsage Cloud</option>
             {/if}
             <option value="github">GitHub</option>
-            <option value="s3">S3 / Compatible</option>
+            <option value="s3">{$t('common.s3Compatible')}</option>
           </select>
           <div class="field-hint">
             {#if syncData.backend === 'cloud'}
@@ -811,7 +811,7 @@
           </div>
           <details class="field full">
             <summary>{$t('settings.githubPatFallback')}</summary>
-            <label class="field-label" for="field-gh-token">Fine-grained Personal Access Token</label>
+            <label class="field-label" for="field-gh-token">{$t('common.githubPat')}</label>
             <div class="credential-row">
               <input id="field-gh-token" type={ghTokenVisible ? 'text' : 'password'}
                 value={ghToken} on:input={e => ghToken = e.target.value}
@@ -844,7 +844,7 @@
             <input id="field-sync-region" type="text" bind:value={syncData.region} class="field-input mono" placeholder="auto" />
           </div>
           <div class="field full">
-            <label class="field-label" for="field-s3-akid">Access Key ID</label>
+            <label class="field-label" for="field-s3-akid">{$t('common.accessKeyId')}</label>
             <div class="credential-row">
               <input id="field-s3-akid" type={s3AkidVisible ? 'text' : 'password'}
                 value={s3AkidValue} on:input={e => s3AkidValue = e.target.value}
@@ -857,7 +857,7 @@
             </div>
           </div>
           <div class="field full">
-            <label class="field-label" for="field-s3-sak">Secret Access Key</label>
+            <label class="field-label" for="field-s3-sak">{$t('common.secretAccessKey')}</label>
             <div class="credential-row">
               <input id="field-s3-sak" type={s3SakVisible ? 'text' : 'password'}
                 value={s3SakValue} on:input={e => s3SakValue = e.target.value}
@@ -912,12 +912,12 @@
           <div class="sync-status-grid">
             <div class="sync-status-item">
               <span class="sync-status-label">{$t('settings.syncLastSync')}</span>
-              <span class="sync-status-value mono">{formatSyncTime(displayedSyncStatus?.lastSyncAt)}</span>
+              <span class="sync-status-value mono">{formatSyncTime(displayedSyncStatus?.lastSyncAt, $lang)}</span>
             </div>
             {#if syncStatusData?.nextSyncAt}
               <div class="sync-status-item">
                 <span class="sync-status-label">{$t('settings.syncNextSync')}</span>
-                <span class="sync-status-value mono">{formatSyncTime(syncStatusData.nextSyncAt)}</span>
+                <span class="sync-status-value mono">{formatSyncTime(syncStatusData.nextSyncAt, $lang)}</span>
               </div>
             {/if}
             <div class="sync-status-item">

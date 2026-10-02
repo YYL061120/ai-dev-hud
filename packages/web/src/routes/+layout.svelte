@@ -2,6 +2,7 @@
   import { page } from '$app/stores'
   import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
+  import LanguageSwitch from '$lib/components/LanguageSwitch.svelte'
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
   import { fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
@@ -156,6 +157,7 @@
 {#if shouldShowLogin}
   <main class="auth-page">
     <section class="auth-card">
+      <div class="page-toolbar"><LanguageSwitch /></div>
       <a href="/" class="brand auth-brand">
         <svg class="brand-logo" width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect width="64" height="64" rx="14" fill="currentColor"/>
@@ -211,6 +213,7 @@
 
     <main class="public-page-content">
       <div class="public-page-inner">
+        <div class="page-toolbar"><LanguageSwitch /></div>
         <slot />
       </div>
     </main>
@@ -221,7 +224,7 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="auth-modal-backdrop" on:click={closeUnlock}></div>
     <section class="auth-card auth-modal" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
-      <button class="auth-close" type="button" on:click={closeUnlock} aria-label="Close">×</button>
+      <button class="auth-close" type="button" on:click={closeUnlock} aria-label={$t('common.close')}>×</button>
       <div class="brand auth-brand">
         <svg class="brand-logo" width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect width="64" height="64" rx="14" fill="currentColor"/>
@@ -351,6 +354,7 @@
     </header>
 
     <main class="page-content">
+      <div class="page-toolbar"><LanguageSwitch /></div>
       <slot />
     </main>
 
@@ -929,6 +933,7 @@
   }
 
   /* Page content */
+  .page-toolbar { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
   .page-content {
     flex: 1;
     min-width: 0;

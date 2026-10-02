@@ -3,7 +3,7 @@
   import { tweened } from 'svelte/motion'
   import { cubicOut } from 'svelte/easing'
   import { fetchHomeSummary, refreshData as triggerRefresh, fetchConfig, fetchQuotas, SETTINGS_UPDATED_EVENT } from '$lib/api.js'
-  import { t } from '$lib/i18n.js'
+  import { t, lang, getLocale } from '$lib/i18n.js'
   import { formatCost, displayCurrency, exchangeRate } from '$lib/stores.js'
 
   const DISPLAY_KEY = 'aiusage-home-display'
@@ -42,7 +42,7 @@
       if (r >= 1_000_000)     return (r / 1_000_000).toFixed(3) + 'M'
       if (r >= 1_000)         return (r / 1_000).toFixed(1) + 'K'
     }
-    return r.toLocaleString()
+    return r.toLocaleString(getLocale($lang))
   }
 
   let data       = null
@@ -155,8 +155,8 @@
     }
   })
 
-  $: timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  $: dateStr  = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+  $: timeStr = now.toLocaleTimeString(getLocale($lang), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  $: dateStr  = now.toLocaleDateString(getLocale($lang), { month: 'short', day: 'numeric', year: 'numeric' })
 
   $: tokenParts    = data ? (data.inputTokens||0)+(data.outputTokens||0)+(data.cacheReadTokens||0)+(data.cacheWriteTokens||0) : 0
   $: inputPct      = tokenParts > 0 ? (data.inputTokens     / tokenParts) * 100 : 0
@@ -209,11 +209,11 @@
     return pct >= 90 ? 'red' : 'orange'
   }
 
-  function fmtShort(n) {
+  function fmtShort(n, language) {
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
     if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1) + 'M'
     if (n >= 1_000)         return (n / 1_000).toFixed(1) + 'K'
-    return n.toLocaleString()
+    return n.toLocaleString(getLocale(language))
   }
 
   function setRange(v) {
@@ -278,7 +278,7 @@
 <div class="top-bar">
   <div class="live-indicator">
     <span class="live-dot"></span>
-    <span class="live-label">LIVE</span>
+    <span class="live-label">{$t('common.live')}</span>
   </div>
 
   <span class="range-badge">{$t(rangeKey)}</span>
@@ -336,17 +336,17 @@
     <div class="counter-sub">
       <div class="sub-item">
         <span class="sub-label">{$t('home.input')}</span>
-        <span class="sub-value">{fmtShort(data.inputTokens)}</span>
+        <span class="sub-value">{fmtShort(data.inputTokens, $lang)}</span>
       </div>
       <div class="sub-divider"></div>
       <div class="sub-item">
         <span class="sub-label">{$t('home.output')}</span>
-        <span class="sub-value">{fmtShort(data.outputTokens)}</span>
+        <span class="sub-value">{fmtShort(data.outputTokens, $lang)}</span>
       </div>
       <div class="sub-divider"></div>
       <div class="sub-item">
         <span class="sub-label">{$t('home.cache')}</span>
-        <span class="sub-value">{fmtShort((data.cacheReadTokens||0)+(data.cacheWriteTokens||0))}</span>
+        <span class="sub-value">{fmtShort((data.cacheReadTokens||0)+(data.cacheWriteTokens||0), $lang)}</span>
       </div>
     </div>
 
@@ -378,11 +378,11 @@
     </div>
     <div class="stat-block">
       <span class="stat-label">{$t('overview.totalSessions')}</span>
-      <span class="stat-value">{Math.round($tSessions).toLocaleString()}</span>
+      <span class="stat-value">{Math.round($tSessions).toLocaleString(getLocale($lang))}</span>
     </div>
     <div class="stat-block">
       <span class="stat-label">{$t('overview.activeDays')}</span>
-      <span class="stat-value">{Math.round($tDays).toLocaleString()}</span>
+      <span class="stat-value">{Math.round($tDays).toLocaleString(getLocale($lang))}</span>
     </div>
   </div>
 
@@ -394,18 +394,18 @@
       <div class="seg seg-output" style="width:{barsReady ? outputPct    : 0}%" title="{$t('home.output')} {outputPct.toFixed(1)}%">
         {#if outputPct > 9}<span class="seg-lbl">{$t('home.output')} {outputPct.toFixed(0)}%</span>{/if}
       </div>
-      <div class="seg seg-cr"     style="width:{barsReady ? cacheReadPct : 0}%" title="Cache R {cacheReadPct.toFixed(1)}%">
-        {#if cacheReadPct > 9}<span class="seg-lbl">Cache R {cacheReadPct.toFixed(0)}%</span>{/if}
+      <div class="seg seg-cr"     style="width:{barsReady ? cacheReadPct : 0}%" title="{$t('tokens.cacheRead')} {cacheReadPct.toFixed(1)}%">
+        {#if cacheReadPct > 9}<span class="seg-lbl">{$t('tokens.cacheRead')} {cacheReadPct.toFixed(0)}%</span>{/if}
       </div>
-      <div class="seg seg-cw"     style="width:{barsReady ? cacheWritePct: 0}%" title="Cache W {cacheWritePct.toFixed(1)}%">
-        {#if cacheWritePct > 9}<span class="seg-lbl">Cache W {cacheWritePct.toFixed(0)}%</span>{/if}
+      <div class="seg seg-cw"     style="width:{barsReady ? cacheWritePct: 0}%" title="{$t('tokens.cacheWrite')} {cacheWritePct.toFixed(1)}%">
+        {#if cacheWritePct > 9}<span class="seg-lbl">{$t('tokens.cacheWrite')} {cacheWritePct.toFixed(0)}%</span>{/if}
       </div>
     </div>
     <div class="comp-legend">
       <span class="leg leg-i">{$t('home.input')}</span>
       <span class="leg leg-o">{$t('home.output')}</span>
-      <span class="leg leg-cr">Cache Read</span>
-      <span class="leg leg-cw">Cache Write</span>
+      <span class="leg leg-cr">{$t('tokens.cacheRead')}</span>
+      <span class="leg leg-cw">{$t('tokens.cacheWrite')}</span>
     </div>
   </div>
 

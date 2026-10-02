@@ -1,6 +1,6 @@
-import { writable, derived } from 'svelte/store'
+import { writable, derived, get } from 'svelte/store'
 
-const translations = {
+export const translations = {
   en: {
     nav: {
       home: 'Home',
@@ -28,6 +28,12 @@ const translations = {
     },
     common: {
       loading: 'Loading...',
+      close: 'Close',
+      live: 'LIVE',
+      githubPat: 'Fine-grained Personal Access Token',
+      s3Compatible: 'S3 / Compatible',
+      accessKeyId: 'Access Key ID',
+      secretAccessKey: 'Secret Access Key',
       error: 'Error',
       noData: 'No data available',
       noDataHint: 'Start using AI tools to see statistics here.',
@@ -543,6 +549,12 @@ const translations = {
     },
     common: {
       loading: '加载中...',
+      close: '关闭',
+      live: '实时',
+      githubPat: '细粒度个人访问令牌（PAT）',
+      s3Compatible: 'S3 / 兼容服务',
+      accessKeyId: '访问密钥 ID',
+      secretAccessKey: '秘密访问密钥',
       error: '错误',
       noData: '暂无数据',
       noDataHint: '开始使用 AI 工具后，统计数据将显示在此处。',
@@ -1035,27 +1047,39 @@ const translations = {
 
 function getStoredLang() {
   if (typeof window === 'undefined') return 'en'
-  return localStorage.getItem('aiusage-lang') || 'en'
+  try {
+    const stored = window.localStorage.getItem('aiusage-lang')
+    if (stored === 'en' || stored === 'zh') return stored
+  } catch { /* Browser storage can be unavailable in private/restricted contexts. */ }
+  return window.navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
 export const lang = writable(getStoredLang())
 
-export function toggleLang() {
-  lang.update(current => {
-    const next = current === 'en' ? 'zh' : 'en'
-    if (typeof window !== 'undefined') localStorage.setItem('aiusage-lang', next)
-    return next
-  })
+export function setLang(language) {
+  if (language !== 'en' && language !== 'zh') return
+  lang.set(language)
+  if (typeof window !== 'undefined') {
+    try { window.localStorage.setItem('aiusage-lang', language) } catch {}
+  }
 }
 
-export const t = derived(lang, ($lang) => {
-  const dict = translations[$lang] || translations.en
-  return (key) => {
-    const parts = key.split('.')
-    let result = dict
-    for (const part of parts) {
-      result = result?.[part]
-    }
-    return result || key
-  }
+export function toggleLang() {
+  setLang(get(lang) === 'en' ? 'zh' : 'en')
+}
+
+export function getLocale(language = get(lang)) {
+  return language === 'zh' ? 'zh-CN' : 'en-US'
+}
+
+export function translate(language, key) {
+  const lookup = dict => key.split('.').reduce((value, part) => value?.[part], dict)
+  const result = lookup(translations[language]) ?? lookup(translations.en)
+  return typeof result === 'string' ? result : key
+}
+
+lang.subscribe(language => {
+  if (typeof document !== 'undefined') document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
 })
+
+export const t = derived(lang, language => key => translate(language, key))

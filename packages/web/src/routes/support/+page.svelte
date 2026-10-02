@@ -77,7 +77,7 @@
     <div class="qr-card">
       <img src="/wechat-support-qr.jpg" alt="WeChat QR" width="280" height="280" />
       <p class="qr-card-hint">{$t('support.qrScanHint')}</p>
-      <button class="qr-close" on:click={closeQr} aria-label="Close">&times;</button>
+      <button class="qr-close" on:click={closeQr} aria-label={$t('common.close')}>&times;</button>
     </div>
   </div>
 {/if}

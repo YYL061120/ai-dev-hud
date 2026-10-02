@@ -1,7 +1,7 @@
 <script>
   import { dateRange, selectedDevice, selectedTool, formatNumber } from '$lib/stores.js'
   import { fetchToolCalls } from '$lib/api.js'
-  import { t } from '$lib/i18n.js'
+  import { t, lang } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
   import DeviceSelector from '$lib/components/DeviceSelector.svelte'
   import ToolSelector from '$lib/components/ToolSelector.svelte'
@@ -119,7 +119,7 @@
         <div class="bar-container">
           <div class="bar" style="width: {tc.percentage}%"></div>
         </div>
-        <span class="count mono">{formatNumber(tc.count)}</span>
+        <span class="count mono">{formatNumber(tc.count, $lang)}</span>
         <span class="pct mono">{tc.percentage.toFixed(1)}%</span>
       </div>
     {/each}

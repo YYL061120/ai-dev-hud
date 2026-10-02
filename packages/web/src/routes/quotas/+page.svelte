@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { t } from '$lib/i18n.js'
+  import { t, lang, getLocale } from '$lib/i18n.js'
   import { fetchQuotas } from '$lib/api.js'
 
   let data = null
@@ -84,9 +84,9 @@
     return `${minutes}m`
   }
 
-  function formatQueryTime(ms) {
+  function formatQueryTime(ms, language) {
     if (!ms) return $t('quotas.never')
-    return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return new Date(ms).toLocaleTimeString(getLocale(language), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
   /** True if this quota card has any interesting data to show */
@@ -131,7 +131,7 @@
         <div class="quota-card card">
           <div class="card-header">
             <span class="tool-name">{toolLabel(quota.tool)}</span>
-            <span class="query-time">{$t('quotas.lastUpdated')}: {formatQueryTime(quota.queriedAt)}</span>
+            <span class="query-time">{$t('quotas.lastUpdated')}: {formatQueryTime(quota.queriedAt, $lang)}</span>
           </div>
 
           {#if quota.credentialStatus === 'expired' && !quota.success}

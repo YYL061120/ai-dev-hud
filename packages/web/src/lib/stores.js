@@ -1,4 +1,5 @@
 import { writable, get } from 'svelte/store'
+import { getLocale } from './i18n.js'
 
 function persisted(key, defaultValue) {
   if (typeof window === 'undefined') return writable(defaultValue)
@@ -47,16 +48,19 @@ export function setCustomRange(from, to, month) {
   dateRange.set({ from, to, month: month || undefined })
 }
 
-export function formatDate(ts) {
-  return new Date(ts).toLocaleDateString()
+export function formatDate(ts, language) {
+  // Date-only usage buckets are local calendar dates, not UTC instants.
+  const match = typeof ts === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(ts)
+  const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(ts)
+  return date.toLocaleDateString(getLocale(language))
 }
 
-export function formatDateTime(ts) {
-  return new Date(ts).toLocaleString()
+export function formatDateTime(ts, language) {
+  return new Date(ts).toLocaleString(getLocale(language))
 }
 
-export function formatNumber(n) {
-  return n.toLocaleString()
+export function formatNumber(n, language) {
+  return n.toLocaleString(getLocale(language))
 }
 
 export function formatCost(n) {

@@ -9,7 +9,7 @@
     startLeaderboardAuth,
     uploadLeaderboardData,
   } from '$lib/api.js'
-  import { t } from '$lib/i18n.js'
+  import { t, lang, getLocale } from '$lib/i18n.js'
 
   let siteUrl = 'https://aiusage.jtanx.com'
   let authLoading = true
@@ -43,15 +43,15 @@
     : null
   $: selectedIntervalLabel = autoUploadIntervals.find(option => option.value === autoUploadInterval)?.labelKey || 'leaderboard.autoUploadIntervals.weekly'
 
-  function formatFullTokens(value) {
+  function formatFullTokens(value, language) {
     const n = Number(value)
-    return Number.isFinite(n) ? n.toLocaleString() : '0'
+    return Number.isFinite(n) ? n.toLocaleString(getLocale(language)) : '0'
   }
 
-  function formatDate(value) {
+  function formatDate(value, language) {
     const d = new Date(value)
     if (Number.isNaN(d.getTime())) return '-'
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleDateString(getLocale(language), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
   function formatUploadStatus(upload) {
@@ -226,16 +226,16 @@
       </div>
       <div class="status-item">
         <span>{$t('leaderboard.authorizedAt')}</span>
-        <strong>{authStatus.loggedIn ? formatDate(authStatus.obtainedAt) : '-'}</strong>
+        <strong>{authStatus.loggedIn ? formatDate(authStatus.obtainedAt, $lang) : '-'}</strong>
       </div>
       <div class="status-item">
         <span>{$t('leaderboard.uploadStatus')}</span>
         <strong>{formatUploadStatus(recentUpload)}</strong>
-        <small>{latestUploadTime ? formatDate(latestUploadTime) : $t('leaderboard.noUploadTime')}</small>
+        <small>{latestUploadTime ? formatDate(latestUploadTime, $lang) : $t('leaderboard.noUploadTime')}</small>
       </div>
       <div class="status-item">
         <span>{$t('leaderboard.nextUpload')}</span>
-        <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
+        <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime, $lang) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
         <small>{autoUploadEnabled ? $t(selectedIntervalLabel) : $t('leaderboard.enableAutoUploadHint')}</small>
       </div>
     </div>
@@ -312,7 +312,7 @@
   <div class="auto-upload-meta">
     <div>
       <span>{$t('leaderboard.nextUpload')}</span>
-      <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
+      <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime, $lang) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
     </div>
     <div>
       <span>{$t('leaderboard.uploadLimits')}</span>
@@ -324,7 +324,7 @@
     <div class="upload-status">
       <span>{$t('leaderboard.lastUpload')}</span>
       <strong>{formatUploadStatus(recentUpload)}</strong>
-      <span>{formatFullTokens(recentUpload.total_tokens)} tokens · {formatDate(recentUpload.created_at)}</span>
+      <span>{formatFullTokens(recentUpload.total_tokens, $lang)} tokens · {formatDate(recentUpload.created_at, $lang)}</span>
     </div>
   {/if}
 

@@ -2,6 +2,12 @@
 
 更新：2026-10-02。当前里程碑：Phase 0 → Phase 1 Windows HUD MVP。后续阶段禁止提前实现。
 
+## 用户追加工作进行中
+
+用户明确授权边缘悬停滑入/收回和 Dashboard 中英文可见切换。当前分支原工作区干净；已查看实际 Library 参考图，是现有 Codex 窄条，保持外观。截图已通过当前 Library 助手取到 Windows，身份属性经 NTFS 命名流写入/校验，保存在仓库外。HUD 新增时间驱动的临界阻尼动画与边缘进入/离开缓冲；网页复用已有字典。实现与真实 Windows/UI 验证未完成，不能把代码编辑视为验收。
+
+追加工作门禁：完整构建通过；完整测试最初在 Windows 沙箱失败，原因是上游 Grok fixture 硬编码 `/tmp`，实际落到不可写的 `C:\tmp`。改为系统 tmpdir 下 mkdtemp 创建的独占目录，仅清理本用例创建的目录；保留全部断言，无新增 skip。修复后 `pnpm.cmd test` 通过：1,083 passed、1 个上游 skip、0 failed，120 个测试文件（core 117 / web 39 / widget 50 / CLI 839 / site 38）。HUD 真实双屏边缘验收已通过；网页语言 GUI 仍在验证。
+
 ## 仓库
 
 - 目录：`C:\AI-Tools\ai-dev-hud`

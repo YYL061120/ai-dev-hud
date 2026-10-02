@@ -4,9 +4,12 @@ import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { initializeDatabase } from '../../src/db/index.js'
 
-const { testDir } = vi.hoisted(() => ({
-  testDir: '/tmp/aiusage-parse-grok-test',
-}))
+const { testDir } = await vi.hoisted(async () => {
+  const { tmpdir } = await vi.importActual<typeof import('node:os')>('node:os')
+  const { mkdtempSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  return { testDir: mkdtempSync(join(tmpdir(), 'aiusage-parse-grok-')) }
+})
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os')
@@ -56,7 +59,7 @@ describe('runParse with Grok Build data', () => {
   })
 
   afterEach(() => {
-    cacheDb.close()
+    cacheDb?.close()
     rmSync(testDir, { recursive: true, force: true })
   })
 

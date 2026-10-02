@@ -29,7 +29,7 @@ pnpm / GH CLI 安装在 `C:\AI-Tools\.ai-dev-hud-tools`，不降低执行策略�
 - 原仪表盘：页面与 `/api/summary?range=day&tool=codex` HTTP 200，Edge 页面加载、截图、0 pageerrors。
 - 原 Windows Electron widget：实际可见、置顶、有可读取的 WidgetData，截图通过；两个实际显示器 scaleFactor 为 1.5 和 1。
 - 自动化初次失败：API range=today 非合法参数，改为上游 day；隔离 AppData 目录缺失造成 Electron abort，创建目录后成功；验证脚本误用不存在的 hasFrame API 已修正。均属验证 harness 修正，无绕过安全设置。
-- 后续只读检查发现原上游整套测试会创建用户 `.aiusage/config.json`（本次测试创建时间 11:55:26，本机 Pacific 时间）。未创建该位置的 usage DB；Cursor 多导入的记录只落在 `:memory:` 测试库，来源数据库 readonly。配置文件保留，不删除用户数据；现在用 `scripts/test-isolated.cjs` 隔离整套 Windows 测试进程的 profile/AppData，防止再次写用户配置。该兼容性修复独立提交。
+- 后续只读检查发现原上游整套测试会创建用户 `.aiusage/config.json`（本次测试创建时间 11:55:26，本机 Pacific 时间）。未创建该位置的 usage DB；Cursor 多导入的记录只落在 `:memory:` 测试库，来源数据库 readonly。测试配置仅含 priceOverrides，未配置 sync/上传；精确核对创建/修改时间后，把本轮新建文件移到仓库外 `ai-dev-hud-evidence/upstream-test-config.json`，前后 SHA256 一致，恢复原先无配置文件的状态。没有删除用户数据。现在用 `scripts/test-isolated.cjs` 隔离整套 Windows 测试进程的 profile/AppData，防止再写用户配置；该修复独立提交。
 - 后续原生验证发现上游 widget test 总是 rebuild Node SQLite，dashboard 占用 DLL 时触发 EBUSY。独立修复为先实际验证 Node ABI，构建通过 Electron ABI 验证与 staged installer，避免修改正在使用的共享 Node binding。没有跳过实际测试。
 
 ## 交付与门禁
@@ -53,7 +53,8 @@ Phase 0 门禁先通过后进入 Phase 1；产品修改前的侦察和计划见 
 - Playwright Electron 验收脚本最后退出码 0。曾有控制器清理等待，测试所有者主动结束其控制器并修正 harness；没有改变产品退出行为或安全设置。
 - 最终 `pnpm.cmd build`：退出码 0；最终 `pnpm.cmd test`：1,056 passed、1 upstream skipped、0 failed，117 core / 32 web / 30 widget / 839 CLI / 38 site。
 - 最终代码上的原 dashboard/Codex/Claude/默认 widget 回归：退出码 0，HTTP 200、两 provider 非空记录、原 widget 可见并截图，0 pageerrors。
-- 构建后源码、private runtime/evidence 与 Git staging 边界已检查。尚待最终提交/远端确认记录。
+- 构建后源码、private runtime/evidence 与 Git staging 边界已检查。没有提交或上传日志、私有 DB、原始提示词/回复或凭据。
+- HUD 实现 commit `a215492e6708a4c8e7371bccac5313a494c0eebe` 已推送到个人 origin。`git ls-remote` 验证开发分支与本地一致、main 仍为上游 `85b8687`，annotated `baseline-aiusage` 标签指向 `508aa09`。本状态文档的最终记录另作 docs commit；完整交付 HEAD 见 `git rev-parse HEAD` 和仓库外晨间报告。
 
 ## 限制与未完成
 
@@ -65,7 +66,7 @@ Phase 0 门禁先通过后进入 Phase 1；产品修改前的侦察和计划见 
 
 Implemented: 仓库/fork/remotes、验证后基线/标签、独立 Windows 修复、文档、最小 HUD、完整构建/测试和真实 Windows 验证。
 
-Not completed: 后续阶段、安装包、热插拔与长时间测试、任务栏视觉确认；最终远端确认另记。
+Not completed: 后续阶段、安装包、热插拔与长时间测试、任务栏视觉确认。
 
 Files changed: AGENTS.md、docs/{PRD,ARCHITECTURE,PROJECT_STATE,ROADMAP,WINDOWS_HUD}.md、root package/test isolation runner、widget main/preload/launcher、HUD data/window/renderer、native helpers、HUD tests、Cursor fixture。
 

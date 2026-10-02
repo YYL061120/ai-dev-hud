@@ -355,6 +355,9 @@ describe('runParse with cursor', () => {
   let cursorDbPath: string
 
   beforeEach(() => {
+    // Windows discovery also checks USERPROFILE independently of homedir().
+    // Keep fixture tests from importing the developer's real transcripts.
+    vi.stubEnv('USERPROFILE', testDir)
     mkdirSync(join(testDir, '.aiusage'), { recursive: true })
     writeFileSync(join(testDir, '.aiusage', 'watermark.json'), '{}')
 
@@ -373,6 +376,7 @@ describe('runParse with cursor', () => {
   afterEach(() => {
     cacheDb.close()
     rmSync(testDir, { recursive: true, force: true })
+    vi.unstubAllEnvs()
   })
 
   it('runParse imports cursor records when tool filter is cursor', async () => {

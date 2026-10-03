@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import type { UsagePeriod, UsageRingsSnapshot } from '../../core/dist/index.js' with { 'resolution-mode': 'import' }
 
 export interface HudUsage {
   tokens: number
@@ -8,6 +9,8 @@ export interface HudUsage {
 }
 
 export interface HudData {
+  rings?: Partial<Record<UsagePeriod, UsageRingsSnapshot>>
+  ringsError?: string
   status: 'ready' | 'unavailable'
   today: HudUsage
   week: HudUsage

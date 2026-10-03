@@ -1,4 +1,5 @@
 /** Native loopback client for the existing AIUsage dashboard and parse API. */
+import type { UsagePeriod, UsageRingsSnapshot } from '../../core/dist/index.js' with { 'resolution-mode': 'import' }
 async function request(port: number, path: string, method = 'GET'): Promise<Response> {
   return fetch(`http://127.0.0.1:${port}${path}`, {
     method, redirect: 'error', signal: AbortSignal.timeout(method === 'POST' ? 120_000 : 2500),
@@ -52,4 +53,16 @@ export async function refreshDashboard(port: number): Promise<void> {
     throw new Error('AIUsage 刷新响应无效')
   }
   if (result.errors.length > 0) throw new Error('AIUsage 部分日志解析失败，请检查 Dashboard')
+}
+/** One canonical metadata API; never combines its counts with synced_records. */
+export async function fetchUsageRings(port: number): Promise<Partial<Record<UsagePeriod, UsageRingsSnapshot>>> {
+  const periods: UsagePeriod[] = ['today', 'seven', 'thirty', 'lifetime']
+  const response = await request(port, '/api/local/usage?period=today&ringPeriods=all')
+  if (!response.ok) throw new Error(`Usage API unavailable (${response.status})`)
+  const value = await response.json() as { ringPeriods?: Record<UsagePeriod, UsageRingsSnapshot> }
+  for (const period of periods) {
+    const ring = value.ringPeriods?.[period]
+    if (ring?.version !== 1 || ring.period !== period || ring.metric !== 'observed-device-token-share' || !Array.isArray(ring.devices) || !Number.isFinite(ring.total?.tokens)) throw new Error('Usage rings API is unavailable; update the local dashboard')
+  }
+  return value.ringPeriods!
 }

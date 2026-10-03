@@ -10,7 +10,7 @@ import { queryHudData, unavailableHudData } from './hud-data'
 import { getHudBounds, getHudDisplayId } from './hud-window'
 import type { HudState } from './hud-window'
 import { HudHoverController } from './hud-hover'
-import { isDashboardReachable, probeDashboard, refreshDashboard } from './dashboard-client'
+import { isDashboardReachable, probeDashboard, refreshDashboard, fetchUsageRings } from './dashboard-client'
 import { t } from './i18n'
 import { loadSettings, saveSettings } from './settings'
 import type { WidgetSettings } from './settings'
@@ -45,6 +45,8 @@ let hudMouseIgnored = true
 let hudRefreshPromise: Promise<ReturnType<typeof getHudData>> | null = null
 let dashboardLaunchPromise: Promise<{ success: boolean; error?: string }> | null = null
 let hudAuthenticationPort: number | null = null
+let hudRings: Awaited<ReturnType<typeof fetchUsageRings>> | undefined
+let hudRingsError: string | undefined
 const HUD_AUTH_MESSAGE = 'Dashboard 需要登录。HUD 自动解析已暂停；请打开仪表盘使用现有登录页。'
 
 let tray: Tray | null = null
@@ -262,6 +264,7 @@ function getHudData() {
     if (!db && existsSync(DB_PATH)) {
       db = new Database(DB_PATH, { readonly: true, nativeBinding: getWidgetNativeBindingPath(__dirname) })
     }
+    if (db) return { ...queryHudData(db), rings: hudRings, ringsError: hudRingsError }
     return db ? queryHudData(db) : unavailableHudData('等待 AIUsage 解析本机用量…')
   } catch {
     return unavailableHudData('暂时无法读取本地用量，请确认 AIUsage 已完成解析。')
@@ -370,6 +373,8 @@ async function refreshHudData(force = false) {
       // CLI ingestion and its serialized write queue own the logs and DB.
       // This HUD cadence also works without a configured CLI refreshInterval.
       await refreshDashboard(getDashboardPort())
+      try { hudRings = await fetchUsageRings(getDashboardPort()); hudRingsError = undefined }
+      catch (error) { hudRings = undefined; hudRingsError = error instanceof Error ? error.message : '设备用量暂不可用' }
       const data = getHudData()
       win?.webContents.send('hud:data-update', data)
       return data

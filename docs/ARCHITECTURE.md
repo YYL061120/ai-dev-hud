@@ -1,5 +1,15 @@
 # AI Dev HUD 架构与仓库侦察
 
+## 设备用量圈追加
+
+`core/usage-rings.ts` 定义 version 1 `UsageRingsSnapshot`，复用 metadata 的 token 五类求和、设备/记录去重与本地自然日边界。总圈是总量标识；设备弧为 `device.tokens / total.tokens`，无分母时为 null，不表示订阅额度。旧历史中的设备在较短周期可有真实零值，未采集设备不会生成身份。tool/provider/model 分组保留真实来源；`estimatedCost` / `cost` 为 null 时无估值，部分缺失单列数量。
+
+CLI 在 `UsageMetadataStore.overview()` 已有本机优先的 records + 手动 metadata 路径上附加 rings；不叠加 synced_records。`ringPeriods=all` 一次读取、一次时钟生成四周期，避免 HUD 四次加载完整历史。`hud_usage_import_receipts` 仅记录本机接受导入的时间，不改变上游 schema 或 version 1 导出；历史缺失不借用日志时间冒充接收时间。
+
+`web/lib/components/UsageRings.svelte` 为本地页和 widget 共用。SVG 弧、数字用 320 ms 有限 requestAnimationFrame 插值，反向从当前值继续；浮层只用 transform/opacity、最多一个明细，键盘 / 触屏 / Escape 可操作，减少动态效果和隐藏状态立即停止插值。HUD 明细有独立滚动区，保持 Dashboard 按钮可点。renderer 只消费 typed snapshot；widget main 经 loopback API 缓存四周期并由既有串行刷新更新，不逐帧请求或在 UI 解析日志。
+
+现有 `hud-hover.ts` / `hud-window.ts` 未改：32 DIP 感应、外侧 8 DIP 点击穿透、140 ms 唤起 / 450 ms 收回、右边缘固定并向左展开。视频只用于槽、细环、颜色和明细形式；未知配额、回本倍数、帧率参数均不引入。未开启外部同步。
+
 ## 上游基础
 
 独立复核收紧 metadata 标识/枚举边界，不改变provider parser或原SQL记录；Launcher在进程创建前校验登记canonical目录未重定向，并只在新Windows控制台子环境去除TERM=dumb。实际进程和认证界面已由隔离UI/native验收，登录和任务执行不属于该测试。

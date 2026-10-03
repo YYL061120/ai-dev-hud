@@ -1,21 +1,29 @@
 # 项目状态
 
-## 当前授权：设备 Token 用量圈（2026-10-03 UTC，实机验证进行中）
+## 最新交付：设备 Token 用量圈（2026-10-03 UTC，已验收并停止）
 
-用户已明确追加参考交互改造，计划见 TOKEN_RINGS_PLAN.md。core / CLI 已提供同一去重来源的四个自然日周期 snapshot、设备占比、真实 tool/provider/model 明细及缺失估值；可一次读取四周期并使用同一时钟。导入接收时间只留本地 receipt 表，旧历史无可信时间时为 null，不写入 metadata 导出。原 parser、synced_records、云同步行为未改变。
+用户明确追加的参考交互范围见 TOKEN_RINGS_PLAN.md。本轮完成并停止，不启动同步或后续产品阶段。数据层独立提交 `9f858fad4406c0a54b73d86dbceee21ac0b365c4`，共享 UI / HUD / 验证文档另行提交。下方各历史里程碑保留原记录，不覆盖本段最新状态。
 
-Tests: 完整 pnpm.cmd build 与 pnpm.cmd test 已通过（1,132 passed、1 原有 Windows POSIX 权限 skip、0 failed），新增领域和 API 回归通过。共享 UI 和 HUD 已接入，但 Windows 视觉、触屏、混合 DPI、性能及真实实例更新尚在验证；暂不宣称本轮完成。Edge 合成交互发现非聚焦悬停浮层的 Escape 问题，已修正并复测中。实际设备只读侦察仅有一台本机，不能宣称另外两台已接入。
+Implemented: core / CLI 同一去重来源的四个自然日周期 snapshot，设备弧为同周期已采集总量占比，总圈只是总量标识；没有配额或回本倍数。真实 tool/provider/model、会话与用量记录、API 等价估值及缺失数量；一次读取四周期、使用同一时钟。导入接收时间仅存本地 receipt 表，旧历史无可信时间为 null，不写入 metadata 导出。web / widget 共用细环、灰底轨、自有图标、金 / 青 / 橙 / 灰紫与单一明细浮层；数值/SVG 有限插值、浮层 transform/opacity、键盘/触屏/Escape、快速反向、减少动态效果和隐藏后停止动画。HUD 折叠为总量及设备圈，展开保留四周期、本机 Codex Today 与可点击的 Dashboard 按钮；未接入设备只说明，不生成假 ID 或假零值。parser、窗口/边缘控制器和云同步行为未改。
 
-Implemented: typed rings 数据层 / 同周期总量分母 / 接收时间来源；参考 UI 初版。
+Tests: 最终 `pnpm.cmd build` exit0，包含 core/web/CLI/widget 与 Node/Electron SQLite ABI；`pnpm.cmd test` exit0，1,132 passed / 1 原有 Windows POSIX 权限 skip / 0 failed，128 files（core127 / CLI862 / web49 / widget56 / site38）。无新增 skip；site 构建不在根 build 中，未声称已执行。实际 Edge 合成 Codex120 + Claude40，手动 Mac80 / 8日前 Windows250，今日及7天240、30天及累计490；设备求和/占比、重复导入、接收时间已知/历史未知、无估值、单浮层、Escape 保留焦点、触屏切换、减少动态效果与空数据 typed UI fixture 通过，原 provider API 仍160。空数据领域测试为真实空记录，浏览器空数据为明确的合成 API fixture。
 
-Not completed: 本轮 Windows 实机验证与最终 UI 提交；跨设备真实同步和最近会话 adapter 仍未实现。
+Windows Electron 实测：主屏 AW2725QF 150% / 副屏 KB220Q H2 100%，56×216 DIP 折叠、376×536 DIP 展开，右边缘固定/向左展开、外侧点击穿透、不抢焦点、快速返回/反向、托盘暂停恢复、动画中换屏、明细不遮 Dashboard 按钮、Escape 不误收起展开态、实际打开测试 Dashboard 均通过。连续缓存周期反向切换每屏各采样120帧，rAF间隔中位16.7ms / P95约16.8ms / 最差约16.9ms、长任务0；动画请求API0，隐藏后renderer动画回调0。Edge 120帧也约16.7/16.8ms。此为当前合成负载和 Chromium 采样，不能外推到视频未知帧率、任意设备/任意历史规模。普通 overview 仍沿用原内存聚合；分块传输回归含60,123条SQLite历史测试通过。
 
-Files changed: core usage-rings / usage-metadata / index；CLI local-control/usage / API local-control 与测试；TOKEN_RINGS_PLAN、AGENTS 和本状态。
+实际运行：仅重启本任务 Dashboard59516→68272，仍为 `http://127.0.0.1:3847`，认证状态保持；正式 launcher 恢复 HUD PID76788。真实用户配置 / 数据验证主屏上下边缘唤起、不抢焦点、四周期、Codex Today 与原 API 及设备圈模型合计一致、打开真实 Dashboard，无 pageerror。真实仅一台本机，未宣称笔记本或 MacBook 已接入。主屏仍1220717916，widget-settings.json SHA256 `0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2` 完全未改。恢复后的常驻进程又做原生唤起/右锚定/焦点/离开隐藏检查通过；150%下物理折叠bounds为3756,882—3840,1206。未导出真实metadata或拍摄真实用量截图，未停止用户 Codex 会话。
+
+诊断：最初实机检查发现非聚焦 hover 的 Escape 无效、HUD浮层遮挡按钮，均修复后重新完整构建及验收；初次测试观察器漏传入口导致启动错误、原生点击保护曾拒绝非测试窗口，修正测试入口/测试窗口归属后复测通过，未弱化保护或作为产品成功证据。
+
+证据均在仓库外 `C:\AI-Tools\ai-dev-hud-evidence`：rings-full-build.log / rings-full-tests.log；rings-gui-verification.json、rings-hud-verification.json、rings-live-verification.json、rings-restored-resident.json、rings-resident-dashboard.json；rings-page-{mac-detail,lifetime,empty}.png、rings-hud-{collapsed,expanded,detail}-{displayId}.png。图像与 metadata fixture 均为合成，未进入 Git。
+
+Not completed: 另外两台真实电脑接入与跨设备端到端同步、设备别名/身份合并、官方最近会话 adapter（原 daemon control socket 10050 仍未处理）；均不属于本轮。未实现顶部 dock、Win32 AppBar、自动启动、全屏隐藏、引擎集成。导入只按既有 deviceKey+recordKey 去重，不自行猜测跨身份复制日志是否同一设备。无当前里程碑阻塞。
+
+Files changed: core usage-rings / usage-metadata / index；CLI local-control/usage / API local-control；web UsageRings / local-usage；widget dashboard-client / hud-data / main / renderer/Hud；相应 core/CLI/widget 测试与项目文档。
 
 Three highest-priority manual tests:
-1. 同一周期各设备 token 相加等于总圈；未接入设备没有伪造零值。
-2. 悬停 / 点击 / 键盘 Escape 的明细切换与原右侧唤起保持正常。
-3. 手动重复导入不增加用量，旧历史没有虚构连接时间。
+1. 在主屏右侧任意高度停留，展开/收回与快速返回顺手；四周期切换和明细滚动时 Dashboard 按钮仍可点。
+2. 各设备圈相加等于同周期总圈，悬停/键盘/Escape/触屏切换名称、颜色与模型一致；空数据没有假设备或假额度。
+3. 显式导入另一台电脑的 metadata 后再次导入，确认不重复计数、来源写为手动导入而非实时在线，接收时间与未知估值表达正确。
 
 ## 最新修正：延迟导出创建响应的生命周期竞态（2026-10-03 UTC）
 

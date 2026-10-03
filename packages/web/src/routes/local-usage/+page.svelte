@@ -6,6 +6,7 @@
   import type { UsageExportProgress } from '../../../../core/src/usage-transfer.js'
   import { importUsageFile, type FileImportProgress } from '$lib/usage-file'
   import { beginUsageExport } from '$lib/usage-export-lifecycle'
+  import UsageRings from '$lib/components/UsageRings.svelte'
   let data: UsageOverview | null = null
   let busy = false, error = '', period = 'thirty', device = '', project = ''
   let imported: FileImportProgress | null = null, exported: UsageExportProgress | null = null
@@ -82,6 +83,7 @@
 {#if imported}<pre data-testid="import-result" role="status">{$t(`control.transfer-${imported.state}`)} · {number(imported.records, $lang)} {$t('control.confirmedRecords')} · {number(imported.chunks, $lang)} {$t('control.chunks')} · {$t('control.fileRead')} {Math.round(100 * imported.bytes / Math.max(1, imported.totalBytes))}%
 {JSON.stringify(imported.result, null, 2)}</pre>{#if imported.state === 'failed' || imported.state === 'cancelled'}<p class="hint">{$t('control.partialImport')}{#if imported.uncertain} {$t('control.uncertainImport')}{/if}</p>{/if}{/if}
 {#if data}
+{#if data.rings}<section class="rings-section"><UsageRings snapshot={data.rings} language={$lang}/><p class="hint">{$lang === 'zh' ? '弧线表示同周期已采集设备的 token 占比，不是订阅额度。其他设备待接入：可手动导入元数据；未接入不等于用量为零。' : 'Arcs show device shares of collected tokens this period, not subscription quotas. Other devices are not connected yet; import their metadata. Unconnected does not mean zero usage.'}</p></section>{/if}
 <div class="totals">{#each periods as p}<section class="card" data-testid={`usage-${p}`}><h2>{$t(`control.${p}`)}</h2><strong>{number(data.periods[p].tokens, $lang)}</strong><p>{$t('control.tokens')}</p><small>{money(data.periods[p].cost, $lang)} · {number(data.periods[p].sessions, $lang)} {$t('control.sessionCount')} · {number(data.periods[p].records, $lang)} {$t('control.records')}</small></section>{/each}</div>
 <section class="card"><label for="usage-period">{$t('control.filter')}</label><div class="actions">
   <select id="usage-period" bind:value={period} disabled={busy} on:change={() => operation(refresh)}>{#each periods as p}<option value={p}>{$t(`control.${p}`)}</option>{/each}</select>
@@ -94,6 +96,7 @@
 <section class="card"><h2>{$t('control.heatmap')}</h2><div class="heatmap">{#each data.heatmap as day}<div class="day" style={`--activity:${Math.min(0.8, 0.1 + Math.log10(day.tokens + 1) / 10)}`} title={`${day.day}: ${number(day.tokens, $lang)} tokens`}><small>{day.day}</small><span>{number(day.tokens, $lang)}</span></div>{/each}</div></section>
 {:else if busy}<p>{$t('common.loading')}</p>{/if}
 <style>
+  .rings-section { margin:22px 0 26px; position:relative; z-index:2; } .rings-section > .hint { margin:10px 4px 0; }
   .card { padding:20px; margin-bottom:16px; border:1px solid var(--border-subtle); border-radius:12px; background:var(--surface); }
   h2 { font-size:16px; margin:0 0 14px; } strong { font-size:28px; } small, .hint { color:var(--text-secondary); font-size:12px; line-height:1.6; }
   .actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; } .actions .hint { width:100%; margin:0; }

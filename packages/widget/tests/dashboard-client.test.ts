@@ -1,11 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isDashboardReachable, probeDashboard, refreshDashboard } from '../src/dashboard-client'
+import { isDashboardReachable, probeDashboard, refreshDashboard, fetchUsageRings } from '../src/dashboard-client'
 
 const page = "<html><script>localStorage.getItem('aiusage-theme')</script></html>"
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
 afterEach(() => vi.unstubAllGlobals())
 
 describe('AIUsage native dashboard client', () => {
+  it('fetches four typed periods exclusively from the canonical metadata path, without parser writes', async () => {
+    const fetch = vi.fn(async () => json({ ringPeriods: Object.fromEntries(['today', 'seven', 'thirty', 'lifetime'].map(period => [period, { version: 1, period, metric: 'observed-device-token-share', devices: [], total: { tokens: 0 } }])) }))
+    vi.stubGlobal('fetch', fetch)
+    expect(Object.keys(await fetchUsageRings(3847))).toEqual(['today', 'seven', 'thirty', 'lifetime'])
+    expect(fetch).toHaveBeenCalledOnce(); expect(fetch.mock.calls[0][0]).toBe('http://127.0.0.1:3847/api/local/usage?period=today&ringPeriods=all')
+  })
+  it('does not treat legacy totals or a denied response as valid ring data', async () => {
+    for (const response of [json({ totalTokens: 12 }), json({}, 401)]) {
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => response.clone()))
+      await expect(fetchUsageRings(3847)).rejects.toThrow()
+    }
+  })
   it.each([404, 500])('rejects HTTP %i without treating a listening port as ready', async status => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({}, status)))
     expect(await isDashboardReachable(3847)).toBe(false)

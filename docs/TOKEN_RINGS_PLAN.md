@@ -8,3 +8,17 @@
 4. 合成数据验证多设备/旧历史/无数据/重复导入/来源时间/缺失估值/日期与sum；实际Windows Edge/Electron查看截图、细节切换、键盘触控、帧间隔/长任务/隐藏后空闲、混合DPI和现有HUD唤起。本机实测仅一台设备，不宣称笔记本/MacBook已接入或视频级帧率。
 
 分domain/API与UI/验证提交；完成完整build/tests、真实实例检查和状态文档后停止。未授权外发数据、云部署或自动同步。
+
+## 独立复核收尾与可重复验证
+
+网页明细打开期间缩窗的位置重算，以及HUD多行设备圈的明细/footer空间已修复，详见PROJECT_STATE最新章节。只涉及共享圈组件与HUD呈现，未改领域语义或边缘行为。
+
+完成根构建后，用实际生产组件运行回归脚本；Playwright可来自现有工具环境，无需给产品增加依赖。Windows本机示例：
+
+```powershell
+$env:AI_DEV_HUD_PLAYWRIGHT_PATH='C:\AI-Tools\.ai-dev-hud-tools\node_modules\playwright'
+$env:AI_DEV_HUD_LAYOUT_EVIDENCE_DIR='C:\AI-Tools\ai-dev-hud-evidence'
+node scripts\verify-ring-layout.cjs
+```
+
+可用AI_DEV_HUD_BROWSER_PATH指定Chromium；Windows默认使用已安装Edge。脚本创建独立空CLI配置，用core真实领域API生成合成snapshot，不读取用户日志。覆盖打开卡片后420/320/280宽度、两档deviceScaleFactor、3/4/8/12设备的每一个圈、保持焦点/单明细、按钮可见/中心命中/回调。通过不等同于真实电脑均已接入；双屏原生Electron验收另有本机证据。

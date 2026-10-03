@@ -8,6 +8,8 @@ CLI 在 `UsageMetadataStore.overview()` 已有本机优先的 records + 手动 m
 
 `web/lib/components/UsageRings.svelte` 为本地页和 widget 共用。SVG 弧、数字用 320 ms 有限 requestAnimationFrame 插值，反向从当前值继续；浮层只用 transform/opacity、最多一个明细，键盘 / 触屏 / Escape 可操作，减少动态效果和隐藏状态立即停止插值。HUD 明细有独立滚动区，保持 Dashboard 按钮可点。renderer 只消费 typed snapshot；widget main 经 loopback API 缓存四周期并由既有串行刷新更新，不逐帧请求或在 UI 解析日志。
 
+独立复核补齐响应布局：ResizeObserver 观察圈组宽高并重算正在打开的明细位置，不切换 activeKey、不重建焦点按钮；销毁时断开观察。HUD 圈槽高度限制为104 DIP并可滚动，明细在HUD中参与内容流；summary-scroll独立滚动，header/period/footer/update不收缩，因此多行/更多设备不会把Dashboard推出536 DIP窗口或由明细挡住。网页保留原浮层布局。真实生产组件回归见 scripts/verify-ring-layout.cjs（需已构建及可用Playwright/Chromium）；数据/窗口/边缘控制器不变。
+
 现有 `hud-hover.ts` / `hud-window.ts` 未改：32 DIP 感应、外侧 8 DIP 点击穿透、140 ms 唤起 / 450 ms 收回、右边缘固定并向左展开。视频只用于槽、细环、颜色和明细形式；未知配额、回本倍数、帧率参数均不引入。未开启外部同步。
 
 ## 上游基础

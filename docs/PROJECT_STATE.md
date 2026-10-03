@@ -1,5 +1,28 @@
 # 项目状态
 
+## 最新收尾：独立复核两项响应布局 P2（2026-10-03 UTC，已验收）
+
+父任务独立审查复现两项真实生产 Svelte 问题：网页明细打开后从1280缩到420时位置未重算，卡片右侧越界；HUD四台设备使圈组换行后，明细遮挡Dashboard并把按钮推出536 DIP窗口。本轮只修这些布局问题，以下较早验收结论保留为历史，当前状态以本节为准。
+
+Implemented: 共享圈组用ResizeObserver观察容器尺寸变化并重算正在打开的明细位置，保持activeKey与键盘焦点，销毁时断开观察。HUD圈槽最多104 DIP并可滚动；明细参与内容流，summary-scroll承载可滚动内容，header/周期/footer/更新时间不收缩。最多一个明细，Dashboard始终有独立可点击空间。未改typed数据来源、日期/sum/费用语义、parser、窗口尺寸或边缘控制器。
+
+Tests: 最终 `pnpm.cmd build` 和 `pnpm.cmd test` 均exit0；1,132 passed / 1原有Windows POSIX权限skip / 0failed，128files（core127 / CLI862 / web49 / widget56 / site38），无新增skip。新增 `scripts/verify-ring-layout.cjs` 对实际生产构建进行浏览器回归：100%/150%两档、打开明细后1280→420→320→280→1280，以及376×536 HUD的3/4/8/12台设备，共16组、62次逐圈焦点检查，0pageerror。420卡片x60宽300右360；320卡片x18宽284右302；280卡片x18宽244右262。选中设备、焦点与单明细均保持。HUD明细底459，Dashboard从469到504，中心实际命中按钮且调用打开回调；每个设备均可经键盘滚动到圈槽内。
+
+真实Windows Electron另外分别用4台、12台合成设备，在主屏150% / 副屏100%验收：右锚定、向左展开、原生边缘唤起/点击穿透/不抢焦点、快速反向、托盘暂停恢复、动画中换屏、明细不遮按钮、Escape保留展开态、实际打开独立测试Dashboard HTTP200均通过。每屏缓存周期反向采样120帧，rAF间隔中位约6.1ms、P95约6.1–6.2ms；4设备最差14ms，12设备最差7.1ms；长任务0、动画新增API请求0、隐藏后动画回调0。这是本次环境采样，不是帧率保证，不将上一轮16.7ms结果套用于本轮。
+
+真实运行：正式launcher恢复新版常驻HUD PID59724，Dashboard仍PID68272 / `http://127.0.0.1:3847`。实际用户profile验证主屏上下边缘、四周期、Codex Today与原API合计一致、真实Dashboard打开、0pageerror；仅一台真实本机，其他设备只用于明确的合成测试。恢复后又对常驻59724做原生唤起/固定右边缘/前台焦点保持/离开隐藏检查通过。主屏仍1220717916；widget-settings.json SHA256仍 `0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2`。没有导出真实metadata、拍摄真实用量截图、停止用户Codex或修改另一个实验。
+
+证据在仓库外 `C:\AI-Tools\ai-dev-hud-evidence`：rings-layout-full-{build,tests}.log；rings-layout-regression.json；rings-layout-native-{4,12}.{json,log}；rings-layout-live-verification.json、rings-layout-live.log、rings-layout-restored-resident.json；rings-layout-page-{420,320,280}-{1,1.5}.png、rings-layout-hud-{3,4,8,12}-{1,1.5}.png、rings-layout-native-{collapsed,expanded,detail}-{4,12}-{displayId}.png。所有图像使用合成数据，证据和私人运行数据不进入Git。
+
+Not completed: 真实另外两台电脑接入、外部同步、任意历史/设备规模性能保证与未授权后续阶段仍未实现；无本轮阻塞。停止新增产品功能。
+
+Files changed: web共享UsageRings.svelte、widget renderer/Hud.svelte、生产组件回归脚本scripts/verify-ring-layout.cjs，以及ARCHITECTURE / PROJECT_STATE / TOKEN_RINGS_PLAN文档。无依赖或lockfile变更。
+
+Three highest-priority manual tests:
+1. 网页打开设备明细后把窗口缩到420、320或更窄，确认卡片在视窗内且同一设备仍选中，键盘焦点不丢。
+2. 显式导入多设备metadata后，在HUD展开并切换不同设备明细，滚动圈组和内容；确认最多一个明细、Dashboard始终可点且不会被推出窗口。
+3. 在100%/150%两屏检查原右边缘唤起、向左展开、离开收回及真实Dashboard打开；确认四周期与本机Codex Today统计保持一致。
+
 ## 最新交付：设备 Token 用量圈（2026-10-03 UTC，已验收并停止）
 
 用户明确追加的参考交互范围见 TOKEN_RINGS_PLAN.md。本轮完成并停止，不启动同步或后续产品阶段。数据层独立提交 `9f858fad4406c0a54b73d86dbceee21ac0b365c4`，共享 UI / HUD / 验证文档另行提交。下方各历史里程碑保留原记录，不覆盖本段最新状态。

@@ -78,8 +78,14 @@
     const changed = () => { reduced = motion.matches }
     const visibility = () => { pageVisible = !document.hidden; if (!pageVisible) activeKey = null }
     changed(); motion.addEventListener('change', changed); document.addEventListener('visibilitychange', visibility)
+    const geometry = new ResizeObserver(() => {
+      if (!mounted || !activeKey || !detailsEnabled) return
+      const button = root.querySelector(`[data-key="${activeKey}"]`)
+      if (button) position(button as HTMLElement)
+    })
+    geometry.observe(root)
     animate(snapshot)
-    return () => { motion.removeEventListener('change', changed); document.removeEventListener('visibilitychange', visibility) }
+    return () => { geometry.disconnect(); motion.removeEventListener('change', changed); document.removeEventListener('visibilitychange', visibility) }
   })
   onDestroy(() => { mounted = false; cancelAnimationFrame(frame); stopClosing() })
 </script>
@@ -129,9 +135,9 @@
   .big { color:var(--ring-color); font-size:29px; font-weight:650; margin:17px 0 3px; font-variant-numeric:tabular-nums; letter-spacing:-1px; } .big small { margin-left:7px; font-size:11px; letter-spacing:0; } p { margin:4px 0; } .provenance { border-top:1px solid #343438; margin-top:13px; padding-top:12px; color:#b3b3bc; font-size:10px; } .provenance small { display:block; margin-top:4px; }
   .metrics { display:flex; justify-content:space-between; gap:8px; margin-top:12px; font-size:10px; } .metrics span { color:#a4a4ad; } b { font-weight:500; } .model-list { margin-top:14px; max-height:148px; overflow:auto; overscroll-behavior:contain; } .model { margin:0 0 12px; } .model > div:first-child { display:flex; gap:10px; justify-content:space-between; font-size:11px; } .model span { min-width:0; overflow:hidden; text-overflow:ellipsis; } .model small { display:block; margin-top:3px; } .bar { height:2px; background:#37373c; border-radius:2px; margin-top:6px; } .bar i { display:block; height:100%; background:var(--ring-color); border-radius:2px; }
   .compact .ring-dock { flex-direction:column; gap:13px; padding:0; background:none; box-shadow:none; } .compact .unit { width:50px; min-width:0; flex:0 0 auto; } .compact .circle { width:29px; height:29px; margin-bottom:4px; } .compact strong { font-size:11px; letter-spacing:-.2px; } .compact .unit > span { font-size:8px; margin-top:3px; }
-  .hud:not(.compact) .ring-dock { padding:13px 10px; gap:10px; } .hud:not(.compact) .unit { min-width:48px; flex-basis:48px; } .hud:not(.compact) .circle { width:34px; height:34px; margin-bottom:7px; } .hud:not(.compact) strong { font-size:16px; } .hud .detail { padding:14px; } .hud .detail-body { max-height:192px; overflow-y:auto; overscroll-behavior:contain; } .hud .model-list { max-height:92px; }
-  .detail-body,.model-list { scrollbar-width:thin; scrollbar-color:#53535c transparent; }
-  .detail-body::-webkit-scrollbar,.model-list::-webkit-scrollbar { width:5px; }
-  .detail-body::-webkit-scrollbar-thumb,.model-list::-webkit-scrollbar-thumb { background:#53535c; border-radius:5px; }
+  .hud:not(.compact) .ring-dock { padding:13px 10px; gap:10px; max-height:104px; overflow-y:auto; overscroll-behavior:contain; } .hud:not(.compact) .unit { min-width:48px; flex-basis:48px; } .hud:not(.compact) .circle { width:34px; height:34px; margin-bottom:7px; } .hud:not(.compact) strong { font-size:16px; } .hud .detail { position:relative; top:auto; left:0 !important; margin-top:11px; padding:14px; } .hud .detail-body { max-height:192px; overflow-y:auto; overscroll-behavior:contain; } .hud .model-list { max-height:92px; }
+  .detail-body,.model-list,.hud .ring-dock { scrollbar-width:thin; scrollbar-color:#53535c transparent; }
+  .detail-body::-webkit-scrollbar,.model-list::-webkit-scrollbar,.hud .ring-dock::-webkit-scrollbar { width:5px; }
+  .detail-body::-webkit-scrollbar-thumb,.model-list::-webkit-scrollbar-thumb,.hud .ring-dock::-webkit-scrollbar-thumb { background:#53535c; border-radius:5px; }
   @media(prefers-reduced-motion:reduce) { .unit,.detail,.arc { animation:none; transition:none; } }
 </style>

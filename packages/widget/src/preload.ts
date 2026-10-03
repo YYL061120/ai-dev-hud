@@ -3,10 +3,11 @@ import type { WidgetData } from './data'
 import type { WidgetSettings } from './settings'
 import type { ExchangeRateState } from './currency'
 import type { HudData } from './hud-data'
-import type { HudState } from './hud-window'
+import type { HudState, HudArea } from './hud-window'
 
 export interface HudAPI {
   enabled: boolean
+  setRegions: (regions: HudArea[], reduced: boolean) => void
   getData: () => Promise<HudData>
   refresh: () => Promise<HudData>
   getState: () => Promise<HudState>
@@ -18,6 +19,7 @@ export interface HudAPI {
 
 contextBridge.exposeInMainWorld('hud', {
   enabled: process.argv.includes('--ai-dev-hud'),
+  setRegions: (regions: HudArea[], reduced: boolean) => ipcRenderer.send('hud:regions', regions, reduced),
   getData: () => ipcRenderer.invoke('hud:get-data'),
   refresh: () => ipcRenderer.invoke('hud:refresh'),
   getState: () => ipcRenderer.invoke('hud:get-state'),

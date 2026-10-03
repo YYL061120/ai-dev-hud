@@ -1,5 +1,26 @@
 # 项目状态
 
+## 最新阶段：悬停明细与连续动效（2026-10-03 UTC）
+
+
+Implemented: 固定376×536 DIP透明画布、原216 DIP居中圈槽；hover无需click打开左侧明细；持续外壳位置/尺寸/尖角动效与内容crossfade；圈到卡的原生孔洞走廊保留、220 ms可取消离开；原生形状让透明背景及外侧8 DIP点击穿透；reduced-motion覆盖主进程/renderer；记住暂时断开显示器的偏好。沿用typed四周期及真实来源，没有配额/回本或云同步。
+
+Not completed: 当前仅枚举100% KB220Q H2（4189372782），150% AW2725QF主屏不可见。真实主屏/混合DPI换屏、物理鼠标跨圈/间隙与实际背景点击投递未实测。computer-use技能要求node_repl/@oai/sky，本轮工具没有node_repl；没有绕过限制调用自制桌面输入工具。原生测试注入控制器指针，不能称为真实桌面路径验收。动画参数是本轮调参，不是视频实测值。
+
+Files changed: web UsageRings；widget Hud/main/preload/hud-window/hud-hover及两项单测；scripts/verify-hud-hover.cjs和verify-hud-native-bounds.cjs；docs/HANDOFF、PROJECT_STATE、ARCHITECTURE。
+
+Tests: 完整build exit0；完整test exit0，1135 passed / 1既有POSIX skip / 0 failed，128 files。4组连续生产组件路径（scale1/1.5×正常/reduced）通过，4份webm、9帧PNG和hover-continuity.json。浏览器resize/多设备16组62圈布局回归通过。真实Electron在当前100%屏通过：窗口展开前后{704,668,376,536}，rail窗口内{320,160,56,216}完全相同；setShape接受透明孔洞与8 DIP排除，指针注入走廊保持、不focus。所有视觉数据为合成数据。没有用RAF间隔代替连续动画证明。
+
+常驻: 正常launcher启动PID47124；原主屏preferredDisplay1220717916与settingsSha256 0b8f01cde4f30a02dd528cab3f36c88010e38d23e8cced7851c01068a8b4dcc2已恢复，自动回退屏不会覆盖偏好。Dashboard3847/auth/status HTTP200。常驻原生bounds/真实鼠标动画仍未验证，不能沿用隔离实例证据冒充。
+
+Three highest-priority manual tests:
+1. 主屏恢复后沿边缘→总圈→间隙→模型行→设备圈缓慢移动，快速反向及离开后返回，观察卡壳、尖角、内容过渡与圈槽无跳位。
+2. 主屏150%/副屏100%实际换屏，核对偏好恢复、不抢focus、外侧8 DIP及透明背景实际点击落到后方窗口。
+3. 正常/reduced-motion、Tab/Escape、四周期与真实单设备，以及网页中英/窄屏、Dashboard和历史导入导出回归。
+
+
+下方为历史阶段记录；当前状态以本节及docs/HANDOFF.md为准。
+
 ## 当前交接：悬停明细与连续动效优化待实施（2026-10-03 UTC）
 
 用户最新反馈右侧滑动唤起不够丝滑，圈hover不能自然展开明细，并授权继续优化参考交互。随后要求切换到新项目任务聊天；本轮在纯文档边界暂停，没有产品代码修改，没有正在运行的测试写入。完整项目交接见docs/HANDOFF.md，新参考视频观察要点待补齐后实施。

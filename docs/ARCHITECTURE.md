@@ -1,5 +1,13 @@
 # AI Dev HUD 架构与仓库侦察
 
+## 当前悬停动效结构（2026-10-03）
+
+HUD使用固定透明canvas（376×536 DIP）和单独居中rail（56×216 DIP），原生展开状态仅推送typed状态，不resize窗口。摘要opacity/transform过渡，compact UsageRings在rail左侧展示同一detail壳；位置/尺寸/尖角CSS过渡，内容keyed crossfade，初入/退出可反向的Svelte transition。模型列表在随壳尺寸变化的滚动区内裁切。
+
+renderer只报告有界HudArea矩形与reduced-motion，不访问DB/日志。main验证sender/数字/画布边界，setShape排除透明背景和外侧8 DIP；pointer polling仅决定showInactive、interactive和临界阻尼reveal。额外detailBridgeHeld保留原生孔洞中的圈到卡走廊，hover不需要激活窗口或点击。report相同几何不重复IPC。32 DIP/140 ms保持；本轮离开缓冲220 ms，数字/弧和native/renderer壳均尊重reduced-motion。显示器暂时断开只回退，不覆盖持久偏好；重新接入定位回原选择。
+
+自动证据分别为生产renderer连续视频/多帧、真实Electron窗口+注入指针、纯函数DIP测试；不等于物理Windows指针与点击投递验收，限制见HANDOFF。
+
 ## 设备用量圈追加
 
 `core/usage-rings.ts` 定义 version 1 `UsageRingsSnapshot`，复用 metadata 的 token 五类求和、设备/记录去重与本地自然日边界。总圈是总量标识；设备弧为 `device.tokens / total.tokens`，无分母时为 null，不表示订阅额度。旧历史中的设备在较短周期可有真实零值，未采集设备不会生成身份。tool/provider/model 分组保留真实来源；`estimatedCost` / `cost` 为 null 时无估值，部分缺失单列数量。
@@ -10,7 +18,7 @@ CLI 在 `UsageMetadataStore.overview()` 已有本机优先的 records + 手动 m
 
 独立复核补齐响应布局：ResizeObserver 观察圈组宽高并重算正在打开的明细位置，不切换 activeKey、不重建焦点按钮；销毁时断开观察。HUD 圈槽高度限制为104 DIP并可滚动，明细在HUD中参与内容流；summary-scroll独立滚动，header/period/footer/update不收缩，因此多行/更多设备不会把Dashboard推出536 DIP窗口或由明细挡住。网页保留原浮层布局。真实生产组件回归见 scripts/verify-ring-layout.cjs（需已构建及可用Playwright/Chromium）；数据/窗口/边缘控制器不变。
 
-现有 `hud-hover.ts` / `hud-window.ts` 未改：32 DIP 感应、外侧 8 DIP 点击穿透、140 ms 唤起 / 450 ms 收回、右边缘固定并向左展开。视频只用于槽、细环、颜色和明细形式；未知配额、回本倍数、帧率参数均不引入。未开启外部同步。
+当前 `hud-hover.ts` / `hud-window.ts` 已按上节采用固定画布与联合区域：32 DIP感应、外侧8 DIP点击穿透、140 ms唤起 / 220 ms离开缓冲、右边缘固定并向左展开。视频只用于槽、细环、颜色和明细形式；未知配额、回本倍数、帧率参数均不引入。未开启外部同步。
 
 ## 上游基础
 
@@ -67,11 +75,11 @@ HUD 默认每 60 秒经主进程调用现有 `POST /api/refresh`，由 CLI 的�
 
 日期边界分别用年月日构造今日、明日、六天前的本地午夜，避免午夜 DST 归一到 01:00 后影响其他日期。
 
-## 本轮不做
+## Phase 1 历史不做（后续追加以HANDOFF为准）
 
 新 dashboard、多设备 UI、Codex Home、Project Engine、Launcher、AppBar、自动启动、全屏隐藏、Unity/Unreal 集成。当前追加实现边缘唤起原窄条，详细摘要仍由显式展开控制。
 
-## 用户追加的边缘动画适配
+## 用户追加的边缘动画初版（历史，当前结构见首节）
 
 `hud-hover.ts` 是纯时间驱动状态机：全局 DIP 指针、目标窗口矩形、所选显示器工作区输入，输出 reveal/visible/interactive，不接触 provider 或存储。整个workArea右缘内侧32 DIP唤起，与隐藏面板高度无关；最后8 DIP点击穿透，二者分开以保留rail按钮点击。任务栏不触发。进入140ms、离开450ms缓冲，临界阻尼保持反向速度，main隐藏40ms/显示16ms轮询，showInactive不focus。`WidgetSettings.hudDisplayId`保存目标屏，默认/失效回主屏；旧widget设置保存保留该字段。
 

@@ -7,8 +7,8 @@ import { EXCHANGE_RATE_SOURCE } from './currency'
 import type { ExchangeRateState } from './currency'
 import { queryWidgetData } from './data'
 import { queryHudData, unavailableHudData } from './hud-data'
-import { getHudBounds, getHudDisplayId } from './hud-window'
-import type { HudState } from './hud-window'
+import { getHudCanvasBounds, getHudRailBounds, getHudDisplayId } from './hud-window'
+import type { HudState, HudArea } from './hud-window'
 import { HudHoverController } from './hud-hover'
 import { isDashboardReachable, probeDashboard, refreshDashboard, fetchUsageRings } from './dashboard-client'
 import { t } from './i18n'
@@ -42,6 +42,9 @@ const hudHover = new HudHoverController()
 let hudPollTimer: ReturnType<typeof setTimeout> | null = null
 let hudPositionTimers: ReturnType<typeof setTimeout>[] = []
 let hudMouseIgnored = true
+let hudRegions: HudArea[] = []
+let hudReduced = false
+let hudShapeKey = ''
 let hudRefreshPromise: Promise<ReturnType<typeof getHudData>> | null = null
 let dashboardLaunchPromise: Promise<{ success: boolean; error?: string }> | null = null
 let hudAuthenticationPort: number | null = null
@@ -147,7 +150,7 @@ function createTray(): void {
         label: `${index + 1} · ${display.label || `${display.size.width} × ${display.size.height}`}`,
         type: 'radio' as const,
         checked: display.id === hudState.displayId,
-        click: () => { hudState.displayId = display.id; positionHud(true); showWindow() },
+        click: () => { settings = { ...settings, hudDisplayId: display.id }; saveSettings(settings); hudState.displayId = display.id; positionHud(true); showWindow() },
       })) }] : []),
       { type: 'separator' },
       { label: i18n.quit, click: () => { app.exit(0) } },
@@ -204,10 +207,12 @@ function showWindow(): void {
 
 function positionHud(resetReveal = false): void {
   if (!win) return
-  const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
+  const display = screen.getAllDisplays().find(display => display.id === settings.hudDisplayId)
+    ?? screen.getAllDisplays().find(display => display.id === hudState.displayId)
     ?? screen.getPrimaryDisplay()
   hudState.displayId = display.id
-  if (settings.hudDisplayId !== display.id) {
+  // Temporary unplug fallback must not overwrite the remembered monitor.
+  if (settings.hudDisplayId === undefined) {
     settings = { ...settings, hudDisplayId: display.id }
     saveSettings(settings)
   }
@@ -219,7 +224,7 @@ function positionHud(resetReveal = false): void {
     hudMouseIgnored = true
     win.hide()
   }
-  const bounds = getHudBounds(display.workArea, hudState.expanded)
+  const bounds = getHudCanvasBounds(display.workArea)
   win.setBounds(bounds, false)
   // Windows can asynchronously resize the HWND after a cross-DPI move.
   // Reapply only mismatched bounds, without revealing or focusing the HUD.
@@ -240,13 +245,22 @@ function startHudPointerWatch(): void {
     if (!win || win.isDestroyed()) return
     const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
       ?? screen.getPrimaryDisplay()
-    const frame = hudHover.step(performance.now(), screen.getCursorScreenPoint(), win.getBounds(), display.workArea)
+    const canvas = win.getBounds()
+    const regions = hudRegions.map(region => ({ ...region, x: canvas.x + region.x, y: canvas.y + region.y }))
+    const pointer = screen.getCursorScreenPoint()
+    const rail = getHudRailBounds(canvas)
+    const bridgeHeld = regions.some(region => region.width > 100 && region.width < canvas.width - 56 + 1
+      && pointer.x >= region.x + region.width && pointer.x < rail.x
+      && pointer.y >= region.y && pointer.y < region.y + region.height)
+    const bridgeChanged = hudState.detailBridgeHeld !== bridgeHeld
+    hudState.detailBridgeHeld = bridgeHeld
+    const frame = hudHover.step(performance.now(), pointer, rail, display.workArea, regions, hudReduced)
     const ignoreMouse = !frame.interactive
     if (hudMouseIgnored !== ignoreMouse) {
       hudMouseIgnored = ignoreMouse
       win.setIgnoreMouseEvents(hudMouseIgnored)
     }
-    if (Math.abs(hudState.reveal - frame.reveal) > 0.00001) {
+    if (bridgeChanged || Math.abs(hudState.reveal - frame.reveal) > 0.00001) {
       hudState.reveal = frame.reveal
       win.webContents.send('hud:state-update', hudState)
     }
@@ -606,6 +620,22 @@ async function autoSetup(): Promise<void> {
   pushDataUpdate()
 }
 
+// Renderer reports only painted interactive surfaces; transparent canvas stays click-through.
+ipcMain.on('hud:regions', (event, regions: HudArea[], reduced: boolean) => {
+  if (!HUD_MODE || event.sender !== win?.webContents || !Array.isArray(regions)) return
+  const bounds = win.getBounds()
+  hudRegions = regions.slice(0, 4).filter(region => region && [region.x, region.y, region.width, region.height].every(Number.isFinite)
+    && region.x >= 0 && region.y >= 0 && region.width > 0 && region.height > 0
+    && region.x + region.width <= bounds.width + 1 && region.y + region.height <= bounds.height + 1)
+  // Native shape holes make background clicks fall through immediately, independent
+  // of polling. Exclude the outer 8 DIP even when a surface touches the edge.
+  const shape = hudRegions.map(region => ({ x: Math.floor(region.x), y: Math.floor(region.y),
+    width: Math.max(0, Math.min(Math.ceil(region.x + region.width), bounds.width - 8) - Math.floor(region.x)),
+    height: Math.ceil(region.y + region.height) - Math.floor(region.y) })).filter(region => region.width > 0 && region.height > 0)
+  const key = JSON.stringify(shape)
+  if (key !== hudShapeKey) { win.setShape(shape.length ? shape : [{ x: 0, y: 0, width: 1, height: 1 }]); hudShapeKey = key }
+  hudReduced = reduced === true
+})
 // IPC handlers
 ipcMain.handle('hud:get-data', () => getHudData())
 ipcMain.handle('hud:refresh', () => HUD_MODE ? refreshHudData(true) : getHudData())
@@ -613,7 +643,7 @@ ipcMain.handle('hud:get-state', () => hudState)
 ipcMain.handle('hud:set-expanded', (_event, expanded: boolean) => {
   if (HUD_MODE && typeof expanded === 'boolean') {
     hudState.expanded = expanded
-    positionHud()
+    win?.webContents.send('hud:state-update', hudState)
   }
   return hudState
 })

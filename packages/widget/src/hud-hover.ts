@@ -5,7 +5,7 @@ export interface HudHoverFrame { reveal: number; visible: boolean; interactive: 
 export const HUD_EDGE_WIDTH = 32
 export const HUD_CLICK_THROUGH_WIDTH = 8
 export const HUD_ENTER_DELAY_MS = 140
-export const HUD_LEAVE_DELAY_MS = 450
+export const HUD_LEAVE_DELAY_MS = 220
 const POINTER_MARGIN = 10
 const SPRING_SPEED = 26
 
@@ -32,7 +32,7 @@ export class HudHoverController {
     if (!enabled) this.target = 0
   }
 
-  step(now: number, pointer: HudPointer, bounds: HudArea, workArea: HudArea): HudHoverFrame {
+  step(now: number, pointer: HudPointer, bounds: HudArea, workArea: HudArea, regions: HudArea[] = [], reduced = false): HudHoverFrame {
     const previousTarget = this.target
     const right = bounds.x + bounds.width
     // The hidden panel is undiscoverable: wake it anywhere on this monitor's
@@ -41,11 +41,13 @@ export class HudHoverController {
     const atEdge = pointer.x >= edgeRight - HUD_EDGE_WIDTH && pointer.x < edgeRight
       && pointer.y >= workArea.y && pointer.y < workArea.y + workArea.height
     const revealedLeft = right - bounds.width * this.reveal
+    const overPaint = this.reveal > 0 && regions.some(region => pointer.x >= region.x && pointer.x < region.x + region.width && pointer.y >= region.y && pointer.y < region.y + region.height)
+    const overRegion = this.reveal > 0 && regions.some(region => pointer.x >= region.x - POINTER_MARGIN && pointer.x < region.x + region.width + POINTER_MARGIN && pointer.y >= region.y - POINTER_MARGIN && pointer.y < region.y + region.height + POINTER_MARGIN)
     const overPanel = this.reveal > 0 && pointer.x >= revealedLeft - POINTER_MARGIN && pointer.x < right
       && pointer.y >= bounds.y - POINTER_MARGIN && pointer.y < bounds.y + bounds.height + POINTER_MARGIN
 
     if (this.enabled) {
-      if (atEdge || overPanel) {
+      if (atEdge || overPanel || overRegion) {
         this.leftAt = null
         if (this.target === 0) {
           if (this.reveal > 0) this.target = 1
@@ -63,6 +65,7 @@ export class HudHoverController {
       }
     }
 
+    if (reduced) { this.reveal = this.target; this.velocity = 0 }
     const elapsed = this.lastAt === null || previousTarget !== this.target ? 0 : Math.max(0, now - this.lastAt) / 1000
     this.lastAt = now
     const offset = this.reveal - this.target
@@ -75,8 +78,8 @@ export class HudHoverController {
       this.reveal = this.target; this.velocity = 0
     }
     const interactive = this.enabled && this.reveal > 0.05
-      && pointer.x >= right - bounds.width * this.reveal && pointer.x < right - HUD_CLICK_THROUGH_WIDTH
-      && pointer.y >= bounds.y && pointer.y < bounds.y + bounds.height
+      && (overPaint || pointer.x >= right - bounds.width * this.reveal && pointer.y >= bounds.y && pointer.y < bounds.y + bounds.height) && pointer.x < right - HUD_CLICK_THROUGH_WIDTH
+
     return { reveal: this.reveal, visible: this.reveal > 0 || this.target === 1, interactive }
   }
 }

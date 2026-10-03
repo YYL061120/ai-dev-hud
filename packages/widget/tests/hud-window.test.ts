@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getHudBounds } from '../src/hud-window'
+import { getHudBounds, getHudCanvasBounds, getHudRailBounds } from '../src/hud-window'
 
 describe('right-edge HUD positioning', () => {
   it('keeps the right edge fixed and expands left on an offset monitor', () => {
@@ -18,5 +18,18 @@ describe('right-edge HUD positioning', () => {
   })
   it('fits inside a small work area', () => {
     expect(getHudBounds({ x: 10, y: 20, width: 200, height: 300 }, true)).toEqual({ x: 10, y: 20, width: 200, height: 300 })
+  })
+})
+
+
+describe('stable HUD canvas', () => {
+  it('retains the original centered rail on both DPI work areas and short monitors', () => {
+    for (const area of [{ x: 0, y: 0, width: 2560, height: 1392 }, { x: 2560, y: -200, width: 1080, height: 1872 }, { x: -200, y: 20, width: 200, height: 300 }]) {
+      const canvas = getHudCanvasBounds(area)
+      const rail = getHudRailBounds(canvas)
+      const original = getHudBounds(area, false)
+      expect(rail).toEqual(original)
+      expect(canvas.x + canvas.width).toBe(area.x + area.width)
+    }
   })
 })

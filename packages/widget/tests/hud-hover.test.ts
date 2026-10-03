@@ -116,3 +116,25 @@ describe('HUD edge reveal controller', () => {
     expect(controller.step(2200, edge, bounds, workArea)).toEqual({ reveal: 1, visible: true, interactive: false })
   })
 })
+
+
+describe('painted detail and reduced motion', () => {
+  const card = { x: 2192, y: 550, width: 300, height: 256 }
+  it('keeps the detail alive independently of the narrow rail, without consuming transparent canvas clicks', () => {
+    const controller = new HudHoverController(); reveal(controller)
+    const inside = { x: 2300, y: 600 }, corridor = { x: 2498, y: 600 }
+    expect(controller.step(800, inside, bounds, workArea, [card]).interactive).toBe(true)
+    expect(controller.step(2000, inside, bounds, workArea, [card]).reveal).toBe(1)
+    expect(controller.step(2100, corridor, bounds, workArea, [card])).toMatchObject({ reveal: 1, interactive: false })
+    expect(controller.step(2200, { x: 2300, y: 850 }, bounds, workArea, [card]).interactive).toBe(false)
+    expect(controller.step(2300, edge, bounds, workArea, [card]).interactive).toBe(false)
+  })
+  it('honors the edge dwell but removes animation under reduced motion', () => {
+    const controller = new HudHoverController()
+    expect(controller.step(0, edge, bounds, workArea, [], true).reveal).toBe(0)
+    expect(controller.step(139, edge, bounds, workArea, [], true).reveal).toBe(0)
+    expect(controller.step(140, edge, bounds, workArea, [], true).reveal).toBe(1)
+    controller.step(200, away, bounds, workArea, [], true)
+    expect(controller.step(200 + HUD_LEAVE_DELAY_MS, away, bounds, workArea, [], true).reveal).toBe(0)
+  })
+})

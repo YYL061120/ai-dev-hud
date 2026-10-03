@@ -1,11 +1,11 @@
 import { beforeEach, afterEach, describe, it, expect } from 'vitest'
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { ProjectRegistry, discoverProjects, inspectProject, kickoff, readProjectDocument } from '../src/local-control/projects.js'
-import { launchScript } from '../src/local-control/launcher.js'
+import { ProjectRegistry, canonicalRegisteredDirectory, discoverProjects, inspectProject, kickoff, readProjectDocument } from '../src/local-control/projects.js'
+import { launchCodex, launchScript, launchEnvironment } from '../src/local-control/launcher.js'
 import { createLocalControlHandler } from '../src/api/local-control.js'
 
 let root: string
@@ -64,6 +64,22 @@ describe('explicit local project context', () => {
     const script = launchScript('C:\\Official\\codex.exe', "C:\\Projects\\O'Brien & $(whoami)")
     expect(script).toBe("Start-Process -FilePath 'C:\\Official\\codex.exe' -WorkingDirectory 'C:\\Projects\\O''Brien & $(whoami)'")
     expect(script).not.toMatch(/ArgumentList|--dangerously|\bexec\b/)
+  })
+  it('lets a fresh Windows console start interactively when the automation parent declares TERM=dumb', () => {
+    const parent = { TERM: 'dumb', CODEX_HOME: 'C:\\isolated fixture', PATH: 'trusted path' }
+    expect(launchEnvironment(parent)).toEqual({ CODEX_HOME: parent.CODEX_HOME, PATH: parent.PATH })
+    expect(parent.TERM).toBe('dumb')
+    expect(launchEnvironment({ Term: 'DUMB' })).toEqual({})
+    expect(launchEnvironment({ TERM: 'xterm-256color' }).TERM).toBe('xterm-256color')
+  })
+  it('accepts the registered canonical directory but rejects junction/symlink replacement before resolving or launching Codex', async () => {
+    const original = path.join(root, 'registered'); const other = path.join(root, 'other-project')
+    await mkdir(original); await mkdir(other)
+    const project = await new ProjectRegistry(path.join(root, 'registry.json')).register(original)
+    expect(await canonicalRegisteredDirectory(project.path)).toBe(project.path)
+    await rename(original, path.join(root, 'original-preserved'))
+    await symlink(other, original, process.platform === 'win32' ? 'junction' : 'dir')
+    await expect(launchCodex(project.path)).rejects.toThrow('redirected')
   })
   it('requires registered projects and explicit launch acknowledgement over HTTP', async () => {
     const registry = new ProjectRegistry(path.join(root, 'registry.json'))

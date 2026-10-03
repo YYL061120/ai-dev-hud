@@ -1,6 +1,6 @@
 # 项目状态
 
-更新：2026-10-03。Phase 0/1 完成，主屏 HUD 已由用户确认滑出。用户追加的本地控制中心两批功能已完成自动验收，当前分支 `feat/local-control-center`；已加载实际 Dashboard 新服务。近期会话接口、真实 Codex 终端点击验收、云后端与视觉深化尚未完成。具体最新状态见文末“本地控制中心追加”；下方保留历史问题和验证记录。
+更新：2026-10-03。Phase 0/1 完成，主屏 HUD 已由用户确认滑出。本地控制中心两批通过自动验收；独立复核发现的 metadata/目录校验问题已修复，真实 Launcher 按钮已在隔离工程验证启动到认证界面。当前分支 `feat/local-control-center`；实际 Dashboard 已加载修复。近期会话接口、登录后任务执行、云后端与视觉深化尚未完成。具体最新状态见文末“独立复核修复”；下方保留历史问题和验证记录。
 
 ## 历史主屏使用反馈：修复后的用户手动验收已确认可滑出
 
@@ -145,7 +145,7 @@ Three highest-priority manual tests:
 
 Implemented: 本地项目上下文、Codex Home/任务提示预览复制/显式启动入口；本地用量/版本化metadata导入导出/去重/同步接口。
 
-Not completed: 最近会话元数据集成；真实交互终端手动验收；大历史分块导出；跨设备项目自动归并/设备别名；云传输；视觉与交互深化。
+Not completed: 最近会话元数据集成；用户账号配置下的登录后使用；大历史分块导出；跨设备项目自动归并/设备别名；云传输；视觉与交互深化。真实交互启动已由后续独立复核补验，见下节。
 
 Files changed: core local-control/usage-metadata；CLI local-control 项目/launcher/usage 与 API handler；web codex/local-usage、typed clients/字典/导航/preprocess；新增测试与harness文档。
 
@@ -153,5 +153,18 @@ Tests: 两批Windows Edge、完整build/tests、实际常驻HUD只读检查、�
 
 Three highest-priority manual tests:
 1. 登记一个自己的工程，核对引擎/Git/约定文档，预览并复制任务提示，再注销，确认工程文件仍在。
-2. 点击“在所选项目打开Codex”，确认终端工作目录与认证；自行粘贴提示前应没有自动AI请求。
+2. 在自己的账号配置下打开Codex，核对目录与认证；自行粘贴提示前应没有自动AI请求（隔离配置下的实际启动已补验）。
 3. 导出用量metadata并重复导入，再从另一设备显式导入；核对日期/设备/项目统计，同时检查主屏HUD与原Dashboard仍正常。
+
+## 独立复核修复（当前最新）
+
+父任务在36a95bc发现P1认证URL可能原样进入provider/model，以及P2启动目录junction重定向、枚举String强制转换允许数组。旧版本的“安全导出已完成”结论撤回，修复后的边界重新验收。
+
+- model只允许有界普通/namespace标识、Ollama标签或日期revision，拒绝URL、userinfo、查询串/路径；provider采用更窄的普通标识。local数据中的异常值归unknown，import直接拒绝；不会读或导出真实秘密。合成认证URL与数字host userinfo回归，以及正常model保留回归通过。platform/costSource必须字符串枚举，数组/对象/null拒绝，整个invalid batch在写入前拒绝。
+- Launcher在启动前重新realpath并与登记时canonical路径比较，junction/symlink重定向返回409；正常路径接受。真实Windows中文、空格、单引号路径通过UI按钮启动，原生只读process cwd逐字匹配；命令行只有官方codex.exe、无prompt/exec/危险参数。按钮POST只有confirm=true，返回200 started/autoSubmit=false。
+- 首次真实启动发现自动化父进程TERM=dumb阻挡TUI，现只从新Windows终端子进程移除这个值，保留其他环境和非dumb TERM。真实终端显示Codex欢迎/登录菜单，隔离CODEX_HOME未登录，停在认证界面，不选择登录、不传凭据、不发模型任务。
+- 目录移走时UI返回400“Directory is unavailable”；junction替换OtherProject返回409“redirected”，未创建对应测试终端。启动验收只关闭精确匹配临时工程的本次进程，原有Codex进程均仍在。Windows console PrintWindow未提供图像，证据采用独立原生process/cwd/commandline/console-buffer JSON与真实按钮成功/错误/junction截图；截图已实际查看，不把网页反馈单独当作进程启动证据。
+
+最终 `pnpm.cmd build` exit0；`pnpm.cmd test` 1109 passed、1原有skip、0failed、123files（core123、CLI855、web39、widget54、site38）。本地安全回归6领域+7usage+9项目通过，Windows Launcher及控制中心原160/280统计、复制、语言、文件传输、原Dashboard回归通过。一次验收工具把全机新增Codex PID误当额外终端，已改为精确临时目录范围，同时保留原400/409/无测试终端断言与既有进程保留检查；没有放宽产品断言。
+
+实际服务PID48048加载修复，127.0.0.1:3847；新旧真实今日tokens仍一致；HUD42052保留。本轮不实现会话元数据或云传输。证据在仓库外：`launcher-real-verification.json`、`launcher-button-feedback.png`、`launcher-error-feedback.png`、`launcher-junction-rejected.png`、`review-fixes-full-build.log`、`review-fixes-full-tests.log`、`review-fixes-control-gui.log`、`review-fixes-live-readiness.json`。未上传测试export/截图/DB/真实内容。

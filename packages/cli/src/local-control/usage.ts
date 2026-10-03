@@ -12,7 +12,7 @@ function localRow(row: any, currentId: string): UsageMetadataRecord {
   return {
     deviceKey, recordKey: hash('record', `${deviceKey}\0${row.id}`), projectKey: row.cwd ? hash('project', `${deviceKey}\0${projectPathKey(row.cwd)}`) : null,
     sessionKey: row.session_id ? hash('session', `${deviceKey}\0${row.tool}\0${row.session_id}`) : null,
-    ts: row.ts, updatedAt: row.updated_at, tool: row.tool, model: safeUsageIdentifier(row.model), provider: safeUsageIdentifier(row.provider),
+    ts: row.ts, updatedAt: row.updated_at, tool: row.tool, model: safeUsageIdentifier(row.model), provider: safeUsageIdentifier(row.provider, 'provider'),
     platform: ['win32', 'darwin', 'linux'].includes(row.platform) ? row.platform : 'unknown', inputTokens: row.input_tokens, outputTokens: row.output_tokens,
     cacheReadTokens: row.cache_read_tokens, cacheWriteTokens: row.cache_write_tokens, thinkingTokens: row.thinking_tokens, cost: row.cost,
     costSource: ['log', 'pricing', 'unknown'].includes(row.cost_source) ? row.cost_source : 'unknown',

@@ -18,6 +18,13 @@ export async function canonicalDirectory(value: unknown): Promise<string> {
   return root
 }
 
+/** Revalidate a path that was already canonical when it was registered. */
+export async function canonicalRegisteredDirectory(registeredPath: string): Promise<string> {
+  const actual = await canonicalDirectory(registeredPath)
+  if (equalPath(actual) !== equalPath(registeredPath)) throw new LocalControlError('Registered directory moved or redirected; inspect and register the intended project again', 409)
+  return actual
+}
+
 export class ProjectRegistry {
   private pending: Promise<unknown> = Promise.resolve()
   constructor(private filename: string) {}

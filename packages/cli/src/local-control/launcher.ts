@@ -3,7 +3,7 @@ import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { CodexLauncherStatus } from '@aiusage/core'
-import { canonicalDirectory, LocalControlError } from './projects.js'
+import { canonicalRegisteredDirectory, LocalControlError } from './projects.js'
 const exec = promisify(execFile)
 const quote = (value: string) => `'${value.replaceAll("'", "''")}'`
 export async function codexStatus(): Promise<CodexLauncherStatus> {
@@ -22,12 +22,18 @@ export async function codexStatus(): Promise<CodexLauncherStatus> {
 export function launchScript(executable: string, cwd: string): string {
   return `Start-Process -FilePath ${quote(executable)} -WorkingDirectory ${quote(cwd)}`
 }
+/** A fresh Windows console supports the TUI; TERM=dumb describes the parent automation pipe. */
+export function launchEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const environment = { ...source }
+  for (const key of Object.keys(environment)) if (key.toUpperCase() === 'TERM' && environment[key]?.toLowerCase() === 'dumb') delete environment[key]
+  return environment
+}
 export async function launchCodex(cwd: string): Promise<{ started: true; autoSubmit: false }> {
-  const root = await canonicalDirectory(cwd)
+  const root = await canonicalRegisteredDirectory(cwd)
   const status = await codexStatus()
   if (!status.available || !status.executable) throw new LocalControlError(status.reason ?? 'Codex unavailable', 409)
   const powershell = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
   const encoded = Buffer.from(`$ErrorActionPreference='Stop'; ${launchScript(status.executable, root)}`, 'utf16le').toString('base64')
-  await exec(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true, timeout: 10000, maxBuffer: 4096 })
+  await exec(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true, timeout: 10000, maxBuffer: 4096, env: launchEnvironment(process.env) })
   return { started: true, autoSubmit: false }
 }

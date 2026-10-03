@@ -17,6 +17,17 @@ describe('local metadata storage adapter', () => {
     expect(transfer.records[0].deviceKey).toBe(deviceKeyFor('local-device-instance')); expect(transfer.records[0].projectKey).toMatch(/^[a-f0-9]{64}$/)
     expect(store.import(transfer)).toEqual({ added: 0, updated: 0, duplicates: 1, conflicts: 0 }); expect(store.overview().selected.tokens).toBe(120)
   })
+  it('normalizes synthetic provider/model credential URLs and rejects them on import without storing credentials', () => {
+    const synthetic = 'https://fixture-user:fixture-secret@private.example/v1'
+    insertRecord(db, { ...fixture(), provider: synthetic, model: synthetic })
+    const store = new UsageMetadataStore(db, 'local-device-instance'); const transfer = store.export()
+    expect(transfer.records[0].provider).toBe('unknown'); expect(transfer.records[0].model).toBe('unknown')
+    expect(JSON.stringify(transfer)).not.toContain('fixture-secret'); expect(store.overview().selected.tokens).toBe(120)
+    const invalid: any = structuredClone(transfer); invalid.records[0].provider = synthetic; invalid.records[0].deviceKey = 'e'.repeat(64)
+    expect(() => store.import(invalid)).toThrow('Invalid version 1'); expect(store.export().records).toHaveLength(1)
+    for (const field of ['platform', 'costSource']) { const invalid: any = structuredClone(transfer); invalid.records[0][field] = [field === 'platform' ? 'win32' : 'pricing']; expect(() => store.import(invalid)).toThrow('Invalid version 1') }
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name='hud_usage_metadata'").get()).toBeUndefined()
+  })
   it('deduplicates imports, updates newer rows and flags equal-version conflicts', () => {
     const store = new UsageMetadataStore(db, 'local-device-instance'); const transfer = store.export()
     transfer.records[0].deviceKey = 'e'.repeat(64); transfer.records[0].recordKey = 'f'.repeat(64)

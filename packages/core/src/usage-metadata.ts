@@ -17,7 +17,12 @@ export const TRANSFER_RECORD_LIMIT = 50_000
 export const USAGE_METADATA_FIELDS = ['deviceKey', 'recordKey', 'projectKey', 'sessionKey', 'ts', 'updatedAt', 'tool', 'model', 'provider', 'platform', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'thinkingTokens', 'cost', 'costSource'] as const
 const fields: readonly string[] = USAGE_METADATA_FIELDS
 const hex = (v: unknown) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)
-const identifier = (v: unknown) => typeof v === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:+/@-]{0,127}$/.test(v) && !/^[A-Za-z]:/.test(v)
+// Namespaced models, Ollama tags, and dated Vertex revisions are identifiers;
+// URLs, userinfo, query strings, and filesystem paths are not usage identifiers.
+const identifier = (v: unknown) => typeof v === 'string' && v.length <= 128
+  && /^[a-zA-Z0-9][a-zA-Z0-9._+/-]*(?::[a-zA-Z0-9][a-zA-Z0-9._+-]*)?(?:@[0-9]{8})?$/.test(v)
+  && !v.includes('://') && !(v.includes(':') && v.includes('@')) && !/^[A-Za-z]:/.test(v)
+const providerIdentifier = (v: unknown) => typeof v === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._+/-]{0,127}$/.test(v)
 const timestamp = (v: unknown) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= 8_640_000_000_000_000
 export function validateUsageTransfer(value: unknown): UsageMetadataTransfer {
   const invalid = () => { throw new Error('Invalid usage metadata: expected version 1, allowlisted fields, safe identifiers and non-negative finite counts') }
@@ -27,13 +32,13 @@ export function validateUsageTransfer(value: unknown): UsageMetadataTransfer {
   for (const item of doc.records) {
     if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length !== fields.length || Object.keys(item).some(k => !fields.includes(k))) return invalid()
     const row = item as Record<string, unknown>
-    if (!hex(row.deviceKey) || !hex(row.recordKey) || (row.projectKey !== null && !hex(row.projectKey)) || (row.sessionKey !== null && !hex(row.sessionKey)) || !timestamp(row.ts) || !timestamp(row.updatedAt) || !(TOOLS as readonly unknown[]).includes(row.tool) || !identifier(row.model) || !identifier(row.provider) || !['win32', 'darwin', 'linux', 'unknown'].includes(String(row.platform)) || !['log', 'pricing', 'unknown'].includes(String(row.costSource))) return invalid()
+    if (!hex(row.deviceKey) || !hex(row.recordKey) || (row.projectKey !== null && !hex(row.projectKey)) || (row.sessionKey !== null && !hex(row.sessionKey)) || !timestamp(row.ts) || !timestamp(row.updatedAt) || !(TOOLS as readonly unknown[]).includes(row.tool) || !identifier(row.model) || !providerIdentifier(row.provider) || typeof row.platform !== 'string' || !['win32', 'darwin', 'linux', 'unknown'].includes(row.platform) || typeof row.costSource !== 'string' || !['log', 'pricing', 'unknown'].includes(row.costSource)) return invalid()
     for (const field of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'thinkingTokens']) if (typeof row[field] !== 'number' || !Number.isSafeInteger(row[field]) || (row[field] as number) < 0 || (row[field] as number) > 1e15) return invalid()
     if (typeof row.cost !== 'number' || !Number.isFinite(row.cost) || row.cost < 0 || row.cost > 1e9) return invalid()
   }
   return value as UsageMetadataTransfer
 }
-export const safeUsageIdentifier = (value: unknown): string => identifier(value) ? value as string : 'unknown'
+export const safeUsageIdentifier = (value: unknown, kind: 'model' | 'provider' = 'model'): string => (kind === 'provider' ? providerIdentifier(value) : identifier(value)) ? value as string : 'unknown'
 export interface UsageTotals { tokens: number; cost: number; records: number; sessions: number }
 export interface UsageBreakdown extends UsageTotals { key: string }
 export interface UsageOverview {

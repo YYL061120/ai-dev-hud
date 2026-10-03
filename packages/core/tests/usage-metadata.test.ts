@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { aggregateUsage, validateUsageTransfer, usageSince, type UsageMetadataRecord, type UsageMetadataTransfer } from '../src/usage-metadata.js'
+import { aggregateUsage, safeUsageIdentifier, validateUsageTransfer, usageSince, type UsageMetadataRecord, type UsageMetadataTransfer } from '../src/usage-metadata.js'
 const row = (ts: number, overrides: Partial<UsageMetadataRecord> = {}): UsageMetadataRecord => ({ deviceKey: 'a'.repeat(64), recordKey: 'b'.repeat(64), sessionKey: 'c'.repeat(64), projectKey: 'd'.repeat(64), ts, updatedAt: ts, tool: 'codex', model: 'gpt-4o', provider: 'openai', platform: 'win32', inputTokens: 100, outputTokens: 20, cacheReadTokens: 5, cacheWriteTokens: 3, thinkingTokens: 2, cost: 0.04, costSource: 'pricing', ...overrides })
 const transfer = (): UsageMetadataTransfer => ({ format: 'ai-dev-hud-usage', version: 1, exportedAt: 1, records: [row(1)] })
 describe('sanitized usage metadata domain', () => {
@@ -18,6 +18,19 @@ describe('sanitized usage metadata domain', () => {
       const value: any = transfer(); Object.assign(value.records[0], invalid); expect(() => validateUsageTransfer(value)).toThrow()
     }
     const value: any = transfer(); delete value.records[0].sessionKey; expect(() => validateUsageTransfer(value)).toThrow()
+  })
+  it('rejects credential URLs and userinfo while preserving normal model identifiers', () => {
+    for (const unsafe of ['https://fixture-user:fixture-secret@private.example/v1', 'http://private.example/v1', 'fixture-user:fixture-secret@private.example', 'fixture-user:fixture-secret@20241022', 'https://api.example/v1?api_key=fixture-secret']) {
+      expect(safeUsageIdentifier(unsafe)).toBe('unknown')
+      for (const field of ['provider', 'model']) { const value: any = transfer(); value.records[0][field] = unsafe; expect(() => validateUsageTransfer(value)).toThrow() }
+    }
+    for (const normal of ['gpt-4o', 'openai/gpt-4o', 'qwen2.5:latest', 'vertex_ai/claude-3-5-sonnet@20241022', 'claude-sonnet-4-6', 'openai-compatible']) expect(safeUsageIdentifier(normal)).toBe(normal)
+    expect(safeUsageIdentifier('fixture-user:fixture-secret', 'provider')).toBe('unknown')
+  })
+  it('requires scalar strings for platform and costSource enums', () => {
+    for (const [field, invalid] of [['platform', ['win32']], ['costSource', ['pricing']], ['platform', { toString: () => 'win32' }], ['costSource', null]]) {
+      const value: any = transfer(); value.records[0][field as string] = invalid; expect(() => validateUsageTransfer(value)).toThrow()
+    }
   })
   it('uses calendar rolling windows including today and excludes the next day', () => {
     const now = new Date(2026, 9, 3, 12)

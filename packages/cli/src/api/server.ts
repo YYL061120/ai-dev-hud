@@ -7,6 +7,7 @@ import type Database from 'better-sqlite3'
 import { calculateCostForPrice, removePriceOverride, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig } from '../config.js'
 import { browserProtocol, isTrustedApiRequest } from './trust.js'
+import { createLocalControlHandler } from './local-control.js'
 import { credentialStatus, publicSyncConfig, setSyncCredentials } from './credential-settings.js'
 import { createGitHubDeviceSessions } from '../github/device-sessions.js'
 import { safeGitHubError, validateRepo } from '../github/auth.js'
@@ -611,6 +612,7 @@ function summaryTotalsPayload(totals: SummaryTotals): SummaryTotals {
 }
 
 export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
+  const localControl = createLocalControlHandler()
   registerLocalDayFunction(db)
   const githubDeviceAction = createGitHubDeviceSessions()
   const cfg = loadConfig()
@@ -765,6 +767,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       await proxyCloudSyncStatus(res)
       return
     }
+
+    if (await localControl(req, res, url)) return
 
     const range = url.searchParams.get('range')
     const from = url.searchParams.get('from')

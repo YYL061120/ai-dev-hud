@@ -2,6 +2,8 @@
 
 ## 上游基础
 
+最新本地扩展：core `local-control.ts` 定义项目/启动契约；CLI `local-control/` 处理文件/Git/登记与交互启动，`api/local-control.ts` 在既有认证/同源保护后增加本机限定；web `/codex` 消费 typed client。登记持久化在用户 `.aiusage/projects.json`，与 usage/sync 数据分开。提示预览只引用约定文档，不自动嵌入内容或发出 AI 请求。下方“不做”是历史 Phase 1 范围，新用户追加按 `LOCAL_CONTROL_PLAN.md` 推进。
+
 AIUsage 是 pnpm workspace，另有 `packages/site` 承担官方网站/云账号等功能。本产品本轮不依赖它。
 
 | 层 | 现有位置 | 职责 |

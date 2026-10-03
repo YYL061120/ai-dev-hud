@@ -2,17 +2,17 @@
 
 ## 当前范围
 
-本轮完成 Phase 0 和 Phase 1，以及用户明确追加的 HUD 边缘悬停滑入/收回、原 Dashboard 中英文可见切换。追加两项分别提交并通过验证后停止；其他后续功能只可记入路线图。
+用户已验收主屏 HUD，并明确追加“先搭完整基本功能”。当前分两批完成本地控制中心：项目登记/有界发现/Codex Home/安全启动器；用量汇总/版本化去隐私 metadata 导入导出/可替换同步接口。两批独立测试提交后停止；不部署云、不自动发出 Codex 提示词、不生成 Unity/Unreal 工程。
 
 ## 必须遵守
 
-- **绝不直接在 main 开发。** 当前分支为 `feat/windows-hud-mvp`。
+- **绝不直接在 main 开发。** 当前分支为 `feat/local-control-center`，来自已验证 HUD 分支。
 - 修改前先阅读实际实现、相关测试和本文件。
 - 重大架构修改前先提出计划；无法从需求安全解决的重大歧义须交给用户。
 - 优先复用 AIUsage；不要重写已工作的 Codex/Claude provider parser。
 - UI 只能消费有类型的领域 API；不在 UI 解析日志或打开数据库。
 - provider parsing、usage domain、storage、sync、presentation 分开；使用适配器或扩展，保持同步后端可替换。
-- 只做当前里程碑；禁止提前实现多设备 UI、Codex Home、Project Engine、Launcher、AppBar、Unity/Unreal 集成。
+- 只做当前明确追加的本地里程碑；禁止 AppBar、Unity/Unreal 集成、默认云上传与未经授权的全盘项目扫描。
 - 有意义的工作后更新 `docs/PROJECT_STATE.md`，区分实测、推断、未测与阻塞。
 - 声称完成前运行相关构建和测试，不忽略失败，不添加跳过来伪造健康基线。
 - 遇到需用户完成的认证、不可逆/破坏性操作或重大不可解架构歧义，暂停对应操作并继续独立安全工作。

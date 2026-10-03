@@ -4,6 +4,8 @@ AI Dev HUD 是基于 [AIUsage](https://github.com/juliantanx/aiusage) 的本地�
 
 ## 本轮交付
 
+最新追加范围：用户验收主屏滑出后要求先完成更多基本功能。当前本地控制中心分两批实现，验收与边界见 `LOCAL_CONTROL_PLAN.md`；不部署云、不自动提交 Codex 请求、不创建引擎工程。以下“本轮不实现”属于早期 Phase 1 历史限制，由新追加范围覆盖相应本地功能。
+
 ### Phase 0
 
 个人 fork `ai-dev-hud`，记录环境和上游提交，验证安装/构建/测试/实际仪表盘及可用 provider；保留接近上游的 main，建立基线标签和开发分支，完成代理约定、需求、架构、项目状态、路线图。

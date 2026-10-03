@@ -125,3 +125,14 @@ Three highest-priority manual tests:
 1. 两屏不同缩放下靠近右缘中部，反复进入/离开并在收回中返回，确认平滑、穿透、不抢焦点；通过真实托盘菜单换屏。
 2. 展开 HUD，启动 Codex 产生用量并和原 Dashboard 今日 Codex 数据对照；打开仪表盘、托盘暂停/恢复和 Esc。
 3. 在 Dashboard 顶部切换中文/English，刷新并访问概览、图表、会话与设置；确认偏好/筛选保留，日期/币种/模型/项目路径正确。
+# 本地控制中心追加（最新状态）
+
+用户已明确确认主屏 HUD 可以滑出；不再把此前鼠标自动化被中断等同功能失败。已保留 `1dfef6e` HUD 行为，并从该提交建立 `feat/local-control-center`。用户新范围覆盖旧 Phase 1 停止条件，计划见 `LOCAL_CONTROL_PLAN.md`。
+
+第一批完成：显式本地项目登记、并发去重、仅注销登记；最多 200 目录/3 层的发现，不跟随链接；Unity/Unreal/Git 标记；只读分支/dirty；约定文档有界阅读；中英 Codex Home；六种 kickoff 预览/复制；用户按钮打开已登记目录的交互 Codex，不自动传 prompt。近期会话元数据没有已集成的稳定接口，明确不可用，不读取原始会话内容。
+
+实际用户环境发现官方 Codex CLI 0.154.0，已运行 `--version` / `--help`。启动路径不接受任意可执行文件/参数；PowerShell 参数用 UTF-16 编码、路径用字面量引用，不降低执行策略。所有新 API 继承同源/认证，另要求本机 loopback；密码开启的远程 Dashboard 不能读取本机项目或启动进程。
+
+验证：core/web/CLI 构建通过；项目边界测试 7/7；完整测试 1094 passed、1 个原有 POSIX permission skip、0 failed。Windows Edge headless 在独立 profile/临时 Git 工程实测登记/发现/引擎/Git/文档/六种预览/复制/中英持久化/注销保留文件/恶意 Origin 拒绝，原 provider 汇总保持 Codex120+Claude40=160。证据在仓库外 `control-batch1-gui.json`、`control-batch1-home.png`、`control-batch1-full-tests.log`。没有替用户点击真实 Codex 启动按钮，实际交互终端与认证需手动验收；会话元数据未完成。
+
+第二批用量汇总及 metadata adapter 尚在实施；本节优先于下方历史状态。

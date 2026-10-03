@@ -1,7 +1,9 @@
 import { writable, derived, get } from 'svelte/store'
+import { controlTranslations } from './control-translations.js'
 
 export const translations = {
   en: {
+    control: controlTranslations.en,
     nav: {
       home: 'Home',
       overview: 'Overview',
@@ -523,6 +525,7 @@ export const translations = {
     },
   },
   zh: {
+    control: controlTranslations.zh,
     nav: {
       home: '首页',
       overview: '概览',

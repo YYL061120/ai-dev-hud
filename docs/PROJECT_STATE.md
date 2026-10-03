@@ -1,5 +1,30 @@
 # 项目状态
 
+## 独立审查修复与额度归属降级（2026-10-03 UTC，优先于下方历史结论）
+
+最终固定提交、生产像素/原生验证及官方 account/read→额度→account/read 实测字段和失败层级见 [ACCOUNT_QUOTA_REVIEW.md](ACCOUNT_QUOTA_REVIEW.md)。查询成功且无认证失败；当前账号响应仅 type/email/planType、账号事件仅 authMode/planType，缺少可用的稳定非秘密身份，未使用邮箱或随机连接代际冒充账号证明。
+
+Implemented:
+修复 0cc3de8 审查的三项问题。额度显示必须同时具备观察携带的 opaque generation 与当前已确认登录代际，缺证明、登出、切号、迟到旧账号响应均为 unknown；旧 bucket/reset 元数据也不显示。现有 Codex proxy/短时 stdio 与 Claude statusline 只能提供窗口，不能证明当前账号登录代际，服务边界因此移除其 windows，不将缓存或设备身份当账号证明。没有读取或保存凭据、邮箱、账号原始身份。
+
+Claude capture 使用跨进程 mkdir 锁，在同一临界区比较入口 observedAt 后原子替换；较新的空窗口也阻止旧快照覆盖。锁等待有界，失败保留未知，不强行删除别人持有的锁。Codex 不合法 bucket ID 拒绝整份观察，避免安全化成同一 unknown 后错误选择百分比。
+
+短时官方 stdio 查询、费用缺失语义和完整模型分组一并交付：真实查询可用，查询进程正常 stdin EOF 退出；模型/设备/项目估算缺失显示未知，合法零费用仍保留。不会重复导入或累计观察。
+
+Not completed:
+真实账号登录代际接入尚未完成，正式额度圈均诚实未知；下方“Codex 2 个 available”仅为此前阶段观察，不代表当前正式显示或账号归属已通过。Claude 未修改用户 statusline 设置，组合接入须保留原输出，具体方案见 SUBSCRIPTION_RINGS_PLAN。原两张参考图经支持流程一次明确本机路径重试仍因官方 helper 的 Windows os.setxattr 不可用未落地，未查看或绕过。物理鼠标、点击穿透、双屏跨缝投递仍未实测；150%/100% 为屏幕枚举及原生控制器注入证据，不等同物理输入通过。
+
+Files changed:
+core subscription-usage/usage-rings/usage-metadata 与测试；CLI subscriptions 与 capture/proxy 测试；共用 UsageRings/UsageToolDetails、本地用量页；生产 UI 和固定 Git 提交回归脚本；架构、计划与交接文档。
+
+Tests:
+最终全量 build exit0；全量 test exit0：1155 passed / 1 原有 Windows POSIX skip / 0 failed，132 files。生产 renderer 的切号/登出/旧响应、未知/过期、周期与 reset 独立、多工具、滚动、键盘和 reduced-motion，以及 16 组布局回归另记交接最终验证记录。固定 SHA 脚本只读取 git show 的源码、生成隔离临时模块，真实双进程测试 capture；不读取用户登录或日志。
+
+Three highest-priority manual tests:
+1. 接入可靠登录代际后，真实切号/登出及迟到 A 响应必须立即保持未知，确认账号共享范围与 reset。
+2. 用户授权 Claude 原 statusline 组合后，验证保留原输出、跨进程捕获顺序及较新空快照失效。
+3. 150% 主屏与 100% 副屏物理鼠标测试跨缝、快速反向、第三目标、外侧 8 DIP 点击穿透及键盘详情滚动。
+
 ## 追加推进：真实 Codex stdio 额度接通与缺失费用修复（2026-10-03 UTC）
 
 Implemented:
@@ -376,25 +401,3 @@ Three highest-priority manual tests:
 最终 `pnpm.cmd build` exit0；`pnpm.cmd test` 1109 passed、1原有skip、0failed、123files（core123、CLI855、web39、widget54、site38）。本地安全回归6领域+7usage+9项目通过，Windows Launcher及控制中心原160/280统计、复制、语言、文件传输、原Dashboard回归通过。一次验收工具把全机新增Codex PID误当额外终端，已改为精确临时目录范围，同时保留原400/409/无测试终端断言与既有进程保留检查；没有放宽产品断言。
 
 实际服务PID48048加载修复，127.0.0.1:3847；新旧真实今日tokens仍一致；HUD42052保留。本轮不实现会话元数据或云传输。证据在仓库外：`launcher-real-verification.json`、`launcher-button-feedback.png`、`launcher-error-feedback.png`、`launcher-junction-rejected.png`、`review-fixes-full-build.log`、`review-fixes-full-tests.log`、`review-fixes-control-gui.log`、`review-fixes-live-readiness.json`。未上传测试export/截图/DB/真实内容。
-## 独立审查修复与额度归属降级（2026-10-03 UTC，优先于下方历史结论）
-
-Implemented:
-修复 0cc3de8 审查的三项问题。额度显示必须同时具备观察携带的 opaque generation 与当前已确认登录代际，缺证明、登出、切号、迟到旧账号响应均为 unknown；旧 bucket/reset 元数据也不显示。现有 Codex proxy/短时 stdio 与 Claude statusline 只能提供窗口，不能证明当前账号登录代际，服务边界因此移除其 windows，不将缓存或设备身份当账号证明。没有读取或保存凭据、邮箱、账号原始身份。
-
-Claude capture 使用跨进程 mkdir 锁，在同一临界区比较入口 observedAt 后原子替换；较新的空窗口也阻止旧快照覆盖。锁等待有界，失败保留未知，不强行删除别人持有的锁。Codex 不合法 bucket ID 拒绝整份观察，避免安全化成同一 unknown 后错误选择百分比。
-
-短时官方 stdio 查询、费用缺失语义和完整模型分组一并交付：真实查询可用，查询进程正常 stdin EOF 退出；模型/设备/项目估算缺失显示未知，合法零费用仍保留。不会重复导入或累计观察。
-
-Not completed:
-真实账号登录代际接入尚未完成，正式额度圈均诚实未知；下方“Codex 2 个 available”仅为此前阶段观察，不代表当前正式显示或账号归属已通过。Claude 未修改用户 statusline 设置，组合接入须保留原输出，具体方案见 SUBSCRIPTION_RINGS_PLAN。原两张参考图经支持流程一次明确本机路径重试仍因官方 helper 的 Windows os.setxattr 不可用未落地，未查看或绕过。物理鼠标、点击穿透、双屏跨缝投递仍未实测；150%/100% 为屏幕枚举及原生控制器注入证据，不等同物理输入通过。
-
-Files changed:
-core subscription-usage/usage-rings/usage-metadata 与测试；CLI subscriptions 与 capture/proxy 测试；共用 UsageRings/UsageToolDetails、本地用量页；生产 UI 和固定 Git 提交回归脚本；架构、计划与交接文档。
-
-Tests:
-最终全量 build exit0；全量 test exit0：1155 passed / 1 原有 Windows POSIX skip / 0 failed，132 files。生产 renderer 的切号/登出/旧响应、未知/过期、周期与 reset 独立、多工具、滚动、键盘和 reduced-motion，以及 16 组布局回归另记交接最终验证记录。固定 SHA 脚本只读取 git show 的源码、生成隔离临时模块，真实双进程测试 capture；不读取用户登录或日志。
-
-Three highest-priority manual tests:
-1. 接入可靠登录代际后，真实切号/登出及迟到 A 响应必须立即保持未知，确认账号共享范围与 reset。
-2. 用户授权 Claude 原 statusline 组合后，验证保留原输出、跨进程捕获顺序及较新空快照失效。
-3. 150% 主屏与 100% 副屏物理鼠标测试跨缝、快速反向、第三目标、外侧 8 DIP 点击穿透及键盘详情滚动。

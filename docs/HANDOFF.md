@@ -1,5 +1,17 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+## 最新交接：审查修复后的保守额度边界（2026-10-03 UTC）
+
+最终事实、固定修复 SHA、官方账号协议探测字段及正式恢复信息见 [ACCOUNT_QUOTA_REVIEW.md](ACCOUNT_QUOTA_REVIEW.md)。stdio 同连接前后 account/read 与额度查询均成功；未知原因是缺稳定非秘密账号字段，不是权限/接口不可用。随机连接 generation 不能替代账号证明。
+
+下方 stdio 查询及旧 available 记录为历史阶段。当前正式 readSubscriptions 清空未绑定账号登录代际的窗口；UI 同时检查 observation.generation 与 snapshot.subscriptionGenerations，任何缺失、切号、登出、旧响应均未知，并隐藏旧 bucket/reset。现有官方窗口数据没有足够的账号登录代际证明，未使用邮箱、设备 ID 或会话 ID 冒充。真实额度接入未完成，禁止将诊断查询成功解释为正式可显示。
+
+已修复跨进程 Claude 写入顺序（mkdir 有界锁、入口时间、临界区比较和 rename，含新空快照）及非法 Codex bucket 碰撞（拒绝观察）。scripts/verify-subscription-review.cjs 接受完整 Git SHA，从该提交源码生成隔离模块并运行合成账号隔离、非法桶及真实双进程捕获回归。不得用工作区源码冒充固定提交结果。
+
+全量最终 build 成功，tests 1155 passed / 1 既有 skip / 0 failed，132 files；Node/Electron SQLite 绑定构建检查通过。费用缺失不再显示零，跨 tool/provider 同名模型及五类 token 总量守恒有测试。证据目录 C:\AI-Tools\ai-dev-hud-evidence\subscription-rings；最终 UI/固定提交/正式进程信息见后续验证记录。
+
+参考 Library 图 libfile_d68642b587a88191b0a5b21cfd0b7cfe、libfile_ba021f4620788191a5494bd47e8d79eb：官方 materialization helper 一次指定本机目录重试仍 os.setxattr 失败，目标不存在，未查看。可用合成 UI 截图 Library ID：libfile_bd9eb0826b2c8191bac4a5d77a5cc016。主屏偏好保持；物理鼠标/真实点击投递仍需手测。完成本轮后停止，等待明确下一阶段授权。
+
 ## 追加推进：真实 Codex stdio 额度接通与缺失费用修复（2026-10-03 UTC）
 
 Implemented:
@@ -122,12 +134,3 @@ Three highest-priority manual tests:
 3. reduced-motion、键盘Tab/Escape、四周期/真实设备来源；中英网页窄屏、Dashboard以及大历史导入/导出保持可用。
 
 复跑：PATH加入C:\AI-Tools\.ai-dev-hud-tools\node_modules\.bin；使用pnpm.cmd。脚本指定AI_DEV_HUD_PLAYWRIGHT_PATH=C:\AI-Tools\.ai-dev-hud-tools\node_modules\playwright，以及AI_DEV_HUD_HOVER_EVIDENCE_DIR/AI_DEV_HUD_LAYOUT_EVIDENCE_DIR。node scripts/verify-hud-hover.cjs；node scripts/verify-hud-native-bounds.cjs；node scripts/verify-ring-layout.cjs。前两脚本只合成数据，后者隔离CLI。Computer Use恢复后才继续真实桌面验收，之后不开展新里程碑。
-## 最新交接：审查修复后的保守额度边界（2026-10-03 UTC）
-
-下方 stdio 查询及旧 available 记录为历史阶段。当前正式 readSubscriptions 清空未绑定账号登录代际的窗口；UI 同时检查 observation.generation 与 snapshot.subscriptionGenerations，任何缺失、切号、登出、旧响应均未知，并隐藏旧 bucket/reset。现有官方窗口数据没有足够的账号登录代际证明，未使用邮箱、设备 ID 或会话 ID 冒充。真实额度接入未完成，禁止将诊断查询成功解释为正式可显示。
-
-已修复跨进程 Claude 写入顺序（mkdir 有界锁、入口时间、临界区比较和 rename，含新空快照）及非法 Codex bucket 碰撞（拒绝观察）。scripts/verify-subscription-review.cjs 接受完整 Git SHA，从该提交源码生成隔离模块并运行合成账号隔离、非法桶及真实双进程捕获回归。不得用工作区源码冒充固定提交结果。
-
-全量最终 build 成功，tests 1155 passed / 1 既有 skip / 0 failed，132 files；Node/Electron SQLite 绑定构建检查通过。费用缺失不再显示零，跨 tool/provider 同名模型及五类 token 总量守恒有测试。证据目录 C:\AI-Tools\ai-dev-hud-evidence\subscription-rings；最终 UI/固定提交/正式进程信息见后续验证记录。
-
-参考 Library 图 libfile_d68642b587a88191b0a5b21cfd0b7cfe、libfile_ba021f4620788191a5494bd47e8d79eb：官方 materialization helper 一次指定本机目录重试仍 os.setxattr 失败，目标不存在，未查看。可用合成 UI 截图 Library ID：libfile_bd9eb0826b2c8191bac4a5d77a5cc016。主屏偏好保持；物理鼠标/真实点击投递仍需手测。完成本轮后停止，等待明确下一阶段授权。

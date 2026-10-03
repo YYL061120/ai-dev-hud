@@ -1,5 +1,9 @@
 # 工具套餐同心环：本地实现与真实额度边界
 
+### 审查修正：查询可达不代表账号归属已确认（2026-10-03）
+
+当前正式显示为未知：官方窗口查询/Claude statusline 无法证明当前登录代际，因此 readSubscriptions 不输出未绑定窗口。未来认证集成必须分别提供当前代际及观察代际，并验证切号、登出、迟到响应；禁止固定代际或账号邮箱/设备/session ID 冒充。下方 stdio 成功仅描述传输可行性。跨进程捕获顺序与非法桶碰撞已修复，固定 SHA 回归脚本随实现交付。
+
 ## 追加授权后的实际连接方案（已实测）
 
 旧socket不可用不阻止标准stdio：本机Codex0.154.0短时启动 `app-server --listen stdio:// -c analytics.enabled=false`，只发initialize→initialized→account/rateLimits/read，使用CLI自身既有登录，不读/复制凭据，不调用login、token-refresh、thread/turn，不启动daemon或监听端口。取得白名单额度后stdin EOF正常退出，实测349ms/exit0/2真实窗口、结果到退出17ms。实现以现有daemon优先、短时stdio fallback，5s查询+1s退出上限、60s缓存与并发合并。正常等待close，超时仅终止自己创建的子进程；要求外部token刷新时返回未知。进程内analytics override不修改用户配置或持久授权。正式API已接通Codex2个available窗口，Claude仍未启用。
@@ -42,6 +46,3 @@ $statuslineJson | node C:\AI-Tools\ai-dev-hud\packages\cli\dist\index.js capture
 运行完整 build/test，以及 `verify-hud-hover.cjs`、`verify-ring-layout.cjs`、`verify-subscription-rings.cjs`、`verify-hud-native-bounds.cjs`。前三者为生产组件+合成数据/浏览器指针；后者为真实 Electron/显示器与控制器注入。物理桌面 pointer、真实背景点击投递与实际账号额度端到端仍须分别验收，不能用模拟替代。
 
 两张用户参考 Library 图片必须按官方 materialization 流程读取；本机官方 helper 在 Windows 缺少 `os.setxattr`，下载未完成，不绕过。新版生产截图仍须实际查看并记录本机证据。
-### 审查修正：查询可达不代表账号归属已确认（2026-10-03）
-
-当前正式显示为未知：官方窗口查询/Claude statusline 无法证明当前登录代际，因此 readSubscriptions 不输出未绑定窗口。未来认证集成必须分别提供当前代际及观察代际，并验证切号、登出、迟到响应；禁止固定代际或账号邮箱/设备/session ID 冒充。下方 stdio 成功仅描述传输可行性。跨进程捕获顺序与非法桶碰撞已修复，固定 SHA 回归脚本随实现交付。

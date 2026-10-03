@@ -7,6 +7,7 @@ import { codexStatus, launchCodex } from '../local-control/launcher.js'
 import type { UsageMetadataStore } from '../local-control/usage.js'
 import { UsageExportJobs } from '../local-control/usage-export.js'
 import { codexMetadataStatus } from '../local-control/session-metadata.js'
+import { readSubscriptions } from '../local-control/subscriptions.js'
 export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new LocalControlError('JSON content type required', 415)
   const chunks: Buffer[] = []; let bytes = 0
@@ -44,6 +45,9 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
           const ringPeriods = url.searchParams.get('ringPeriods')
           if (ringPeriods !== null && ringPeriods !== 'all') throw new LocalControlError('Invalid ring periods')
           const overview = store.overview(period, device, project, undefined, ringPeriods === 'all')
+          const subscriptions = await readSubscriptions()
+          overview.rings.subscriptions = subscriptions
+          for (const snapshot of Object.values(overview.ringPeriods ?? {})) snapshot.subscriptions = subscriptions
           overview.projectLabels = Object.fromEntries((await registry.list()).map(item => [store.projectKeyFor(item.path), item.name]))
           reply(res, overview)
         } else if (route === 'usage/export' && req.method === 'GET') {

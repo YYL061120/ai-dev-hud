@@ -38,11 +38,12 @@ function hudInput({ rings, count }) {
   const data = { status: 'ready', today: usage, week: usage, models: [], updatedAt: Date.now(), rings }
   let state = { expanded: true, displayId: 0, reveal: 1, hoverEnabled: true }
   window.dashboardCalls = 0
+  let listener
   window.hud = {
     enabled: true, getData: async () => data, refresh: async () => data, getState: async () => state,
-    setExpanded: async expanded => state = { ...state, expanded },
+    setExpanded: async expanded => { state = { ...state, expanded }; listener?.(state); return state },
     openDashboard: async () => { window.dashboardCalls++ },
-    onDataUpdate: () => () => {}, onStateUpdate: () => () => {},
+    onDataUpdate: () => () => {}, onStateUpdate: fn => { listener = fn; return () => {} },
   }
 }
 async function run() {
@@ -99,26 +100,35 @@ async function run() {
         await hudContext.addInitScript(hudInput, { rings: sample(count).rings, count })
         const hud = await hudContext.newPage(); observe(hud); await hud.goto(widget)
         await hud.getByTestId('hud-summary').waitFor()
-        const group = hud.locator('.summary'), units = group.getByTestId('usage-ring')
-        assert.equal(await units.count(), count + 1)
-        for (let index = 0; index <= count; index++) {
-          await keyboardDetail(hud, units.nth(index))
-          const dock = await geometry(hud, '.summary .ring-dock'), unit = await units.nth(index).boundingBox()
-          assert(unit.y >= dock.y - 1 && unit.y + unit.height <= dock.bottom + 1, 'Every device must be reachable by keyboard within the scrolling dock')
-          assert.equal(await hud.getByTestId('ring-detail').count(), 1)
-          assert.equal(await units.nth(index).evaluate(element => element === document.activeElement), true)
-          const card = await geometry(hud, '.summary [data-testid="ring-detail"]'), dashboard = await geometry(hud, '[data-testid="open-dashboard"]')
-          assert(card.bottom <= dashboard.y && card.right <= 376 && card.x >= 0, JSON.stringify({ count, scale, index, card, dashboard }))
+        const selectors = hud.locator('.summary .devices button')
+        assert.equal(await selectors.count(), count)
+        for (let index = 0; index < count; index++) {
+          await selectors.nth(index).focus(); await hud.keyboard.press('Enter')
+          assert.equal(await selectors.nth(index).getAttribute('aria-pressed'), 'true')
+          assert.equal(await selectors.nth(index).evaluate(element => element === document.activeElement), true)
+          const dashboard = await geometry(hud, '[data-testid="open-dashboard"]')
           assert(dashboard.bottom <= 536 && dashboard.y >= 0, 'Dashboard button must fit inside the viewport')
           assert.equal(await hud.getByTestId('open-dashboard').evaluate(element => {
             const r = element.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
             return hit?.closest('[data-testid="open-dashboard"]') === element
-          }), true, 'Detail must not intercept Dashboard clicks')
+          }), true, 'Scrolled details must not intercept Dashboard clicks')
+          await hud.locator('.summary-scroll').evaluate(element => element.scrollTop = element.scrollHeight)
         }
-        const dashboard = await geometry(hud, '[data-testid="open-dashboard"]'), card = await geometry(hud, '.summary [data-testid="ring-detail"]')
+        const dashboard = await geometry(hud, '[data-testid="open-dashboard"]')
         await hud.screenshot({ path: path.join(evidence, `rings-layout-hud-${count}-${scale}.png`) })
         await hud.getByTestId('open-dashboard').click(); assert.equal(await hud.evaluate(() => window.dashboardCalls), 1)
-        checks.push({ type: 'hud-devices', scale, count, accessibleRings: count + 1, singleDetail: true, focusRetained: true, card, dashboard, dashboardHitAndCallback: true })
+        await hud.getByTestId('hud-toggle').click(); await pause(300)
+        const units = hud.locator('.rail').getByTestId('usage-ring')
+        assert.equal(await units.count(), count)
+        for (let index = 0; index < count; index++) {
+          await keyboardDetail(hud, units.nth(index))
+          const dock = await geometry(hud, '.rail .ring-dock'), unit = await units.nth(index).boundingBox()
+          assert(unit.y >= dock.y - 1 && unit.y + unit.height <= dock.bottom + 1, 'Keyboard must reach every scrolling device icon')
+          const card = await geometry(hud, '.rail [data-testid="ring-detail"]')
+          assert(card.bottom <= 536 && card.right <= 376 && card.x >= 0 && card.y >= 0)
+          assert.equal(await hud.getByTestId('ring-detail').count(), 1)
+        }
+        checks.push({ type: 'hud-devices', scale, count, accessibleRings: count, singleDetail: true, focusRetained: true, dashboard, dashboardHitAndCallback: true })
         await hudContext.close()
       }
     }

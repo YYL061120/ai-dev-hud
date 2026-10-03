@@ -27,6 +27,8 @@ async function run(){
   await pause(550)
   await app.evaluate((_,p)=>globalThis.simulatedPointer=p,{x:display.workArea.x+display.workArea.width-4,y:display.workArea.y+50})
   await until(async()=>(await page.evaluate(()=>window.hud.getState())).reveal===1)
+  // Main's settled reveal is delivered before the renderer's 40ms interpolation completes.
+  await pause(80)
   const before=await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];return{bounds:w.getBounds(),focused:w.isFocused(),visible:w.isVisible()}})
   const railBefore=await page.locator('.rail').boundingBox()
   const units=page.locator('.rail [data-testid="usage-ring"]'), b=await units.first().boundingBox()

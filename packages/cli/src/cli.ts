@@ -25,10 +25,15 @@ import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { captureClaudeSubscription } from './local-control/subscriptions.js'
 
 const DB_PATH = join(AIUSAGE_DIR, 'cache.db')
 
 const program = new Command()
+
+program.command('capture-claude-limits').description('Capture official statusline quota fields from stdin locally; does not configure Claude').action(async () => {
+  try { await captureClaudeSubscription(process.stdin) } catch { console.error('无法保存套餐状态；输入须为有界官方 statusline JSON。'); process.exitCode = 1 }
+})
 
 declare const __VERSION__: string | undefined
 

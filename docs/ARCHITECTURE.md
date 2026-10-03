@@ -1,5 +1,15 @@
 # AI Dev HUD 架构与仓库侦察
 
+## 当前工具套餐同心环（2026-10-03 新阶段）
+
+本节替代旧“设备 token 份额弧”的 UI 呈现；旧 UsageRingsSnapshot.metric/total/share 继续作为兼容的采集统计字段，不用于画套餐进度。设备/模型 tokens 与估算费用继续由 UsageMetadataStore 和 buildUsageRings 产生，未重写 parser/SQL/导入去重。
+
+core/subscription-usage.ts 定义 ToolSubscription/SubscriptionWindow，专门表示官方账号共享观测。CLI/local-control/subscriptions.ts 承担官方协议与可选 Claude stdin 捕获，usage API 给四周期附加同一个 observations 数组。DTO不包含账号凭据/原payload，也不进入 metadata export；与 storage/usage/sync 解耦。Codex只探测已有daemon并代理只读RPC，不启动服务；Claude只保存白名单，配置接入仍由用户选择。多bucket/window/null/reset/freshness统一由领域函数处理，UI不解析协议、日志或数据库。
+
+UsageRings默认仅设备图标，按tool同心环、未知/过期虚线、有效官方窗口才绘弧；不绘device.share、不把本机账号额度复制到导入设备。ringToolUsage为typed工具分组，保留真实历史工具槽及费用null；UsageToolDetails复用在hover与独立更多详情panel。周期选择只在hover层，统计日期和套餐实际窗口分开。原固定透明canvas、32 DIP/140ms、8 DIP穿透、向左展开、桥接保持与最多两层crossfade不变；新增图标反馈尊重reduced-motion。
+
+现场额度可行性、可选接入与验证边界见 SUBSCRIPTION_RINGS_PLAN/PROJECT_STATE。150%主屏本轮已重新枚举；两屏原生验证使用真实Electron+注入控制器，不冒称物理桌面输入。下方旧段落为历史沿革。
+
 ## 当前悬停动效结构（2026-10-03）
 
 HUD使用固定透明canvas（376×536 DIP）和单独居中rail（56×216 DIP），原生展开状态仅推送typed状态，不resize窗口。摘要opacity/transform过渡，compact UsageRings在rail左侧展示同一detail壳；位置/尺寸/尖角CSS过渡，内容经usage-content-transition纯presentation helper保持最多两层crossfade（无outro积累），反向交换层保留权重，同圈重入保留进度；隔离plus-lighter合成保持共同文字亮度，初入/退出可反向的Svelte transition。模型列表在随壳尺寸变化的滚动区内裁切。

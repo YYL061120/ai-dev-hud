@@ -1,5 +1,39 @@
 # 项目状态
 
+## 新阶段：工具套餐同心环与独立更多详情（2026-10-03 UTC）
+
+起点实测为 `15ee57f`，分支 `feat/local-control-center`，初始工作区干净；ARCHITECTURE/HANDOFF 位于 docs，仓库现场无 .agents 目录。实施方案见 `docs/SUBSCRIPTION_RINGS_PLAN.md`；以下替代旧设备份额弧的 UI 说明，metadata/API 的原采集份额字段仍保留兼容。
+
+Implemented:
+默认 HUD 仅设备图标与工具同心环，Claude Code 橙色、OpenAI/Codex 白色，额外工具向外加环，工具槽保留历史来源以避免短周期换环。未知/过期使用虚线且无百分比弧；导入设备不复制本机账号额度。hover 保留已有固定壳/走廊/两层有界 crossfade，按工具列模型 tokens、金额与官方实际套餐窗口，删除会话/采集记录数及重复费用标题。底部详情图标轻微放大，点击独立更多详情 panel；四周期选择在 hover 层，panel 只说明当前统计日期及与套餐窗口的区别。模型金额未知为 null/“金额未知”，估算说明保留 tooltip 与二级说明。共用本地用量页，项目及大历史传输不改。
+
+Core 新增账号共享额度 DTO/白名单归一化/窗口有效期；Codex 优先多 bucket，不把 bucket 当模型，也不硬编码 primary=5h；主环取通用 bucket 的最长实际窗口，多未知 bucket 不相加。CLI 仅探测并连接已运行 daemon 的 proxy，超时/响应有界，只做 initialize/rateLimits/read，不读 auth/account/会话或启服务。Claude 增加可选 `capture-claude-limits` stdin 命令，仅存五小时/七天额度白名单，不覆写 statusline 配置，不累计其上下文 tokens。观测附加到四周期 typed API，不写 usage DB，不进入 metadata 导出。
+
+Not completed:
+真实账号额度端到端未接通：Codex 0.154.0 的现有 control socket 实测不可连接；Claude Code 2.1.284 存在，但未配置捕获、不发模型请求，所以正式快照 subscriptions=[]，UI 诚实显示未知。最小可选接入方案在计划文档，未启动 daemon、抽取凭据、读取私有 OAuth API 或新增云服务。官方接口存在不能等同本机额度已读到。
+
+两张用户参考截图 `libfile_d68642b587a88191b0a5b21cfd0b7cfe` / `libfile_ba021f4620788191a5494bd47e8d79eb` 已按 Library 当前技能及 resolved-reference 流程准备；官方 helper 在 Windows 因 `os.setxattr` 缺失而失败，没有完成物化/实际查看，没有绕过。新版生产 PNG 已实际目视检查；发现并修复周期切换日期文本不响应与旧样式残留。新版合成截图已成功保存 Library：`libfile_bd9eb0826b2c8191bac4a5d77a5cc016`（subscription-hover-motion.png）；本地 xattrs 写回仍受同一 Windows helper 限制，不声称本地身份元数据持久化成功。
+
+真实物理桌面 pointer/背景点击投递未测：本次可用工具无 computer-use 技能所需 node_repl/@oai/sky，未自制输入工具绕过。显示器重新枚举已恢复 150% 主屏1220717916和100%副屏4189372782；真实 Electron 在两屏窗口/rail/bounds/setShape/no-focus 验证通过，但指针为控制器注入，不等于物理输入验收。常驻实际窗口 bounds 未额外读取，不用隔离实例代替。
+
+Files changed:
+core subscription-usage.ts / usage-rings.ts / index.ts 与额度测试；CLI local-control/subscriptions.ts、api/local-control.ts、cli.ts 与白名单/proxy测试；web UsageRings.svelte、UsageToolDetails.svelte、本地用量页；widget renderer/Hud.svelte；三个既有生产回归脚本及新 verify-subscription-rings.cjs；.gitignore（仅忽略临时验证目录）；PROJECT_STATE/HANDOFF/ARCHITECTURE/TOKEN_RINGS_PLAN 与新 SUBSCRIPTION_RINGS_PLAN。
+
+Tests:
+最终 `pnpm.cmd build` exit0；`pnpm.cmd test` exit0，1147 passed / 1既有Windows POSIX skip / 0failed，132 files（core131 / CLI867 / web52 / widget59 / site38）。新增9条测试覆盖多bucket/实际窗口/真实0与null/未知/过期/reset/Claude上下文及网关排除/金额缺失/白名单不累计/proxy allowlist、错误与大小限制。Electron staged SQLite binding已验证、shared Node binding未改；完整大历史WAL快照/分块导出/取消/去重测试通过。
+
+生产组件最终4组hover连续路径（1/1.5×normal/reduced）通过：跨缝停留、60ms反向、同圈重入、第三/第四设备、Tab/Escape、固定rail、Dashboard；最多正常2层/reduced1层。16组布局（网页1280→420→320→280→1280，HUD3/4/8/12设备×1/1.5）通过，54个HUD设备可键盘到达，滚动不挡Dashboard。新额度UI2组normal/reduced通过：5工具同心环、fresh/unknown/stale、账号共享不分配给导入设备、3小时实际窗口、不受统计周期影响、日期响应、金额未知、滚动及独立panel。两块真实显示器原生测试通过。早期失败分别为旧测试“离开”坐标落入更高卡片、测试遗漏 enabled 和原生采样落在40ms插值中；已修正测试路径/初始化/等待实际收敛后保持严格断言复跑通过，未添加skip。像素目视检查4种状态及日期修复后的hover/panel。
+
+证据：`C:\AI-Tools\ai-dev-hud-evidence\subscription-rings`，包含 subscription-ui.json、hover-continuity.json、rings-layout-regression.json、hover-native-bounds.json、8张subscription状态PNG、9张hover切换PNG、4份连续webm、布局PNG、最终build/tests及回归日志、resident-readiness.json。数据/DB/原始日志/提示/回复/源码采集/凭据均不commit。
+
+正式恢复实测：旧HUD18040/Dashboard68272经身份核验后仅重启本仓库进程；新正常launcher HUD53768、Dashboard68976（3847）。preferredDisplay1220717916、settings SHA256 `0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2` 未变；auth/status200、usage200、真实deviceCount1、四周期齐全、subscriptionObservationCount0。完成本轮后停止，等待独立审查或下一项明确授权。
+
+Three highest-priority manual tests:
+1. 在真实150%主屏和100%副屏，物理边缘→设备→间隙→模型行、60ms反向与第三目标切换；验真实背景8 DIP/透明区点击投递、不抢焦点及显示器断开恢复。
+2. 用户选择最小官方额度接入后核对实际账号共享百分比、各bucket/窗口/reset、过期回未知与账号切换；Claude原statusline输出保持可用，不接私有OAuth接口或自动启daemon。
+3. 真实数据下四统计时段、更多工具/设备、滚动/键盘/reduced-motion、费用未知与真实0区别，以及项目Launcher和大历史传输回归。
+
+
 ## 独立复核 P2：快速反向内容层有界（2026-10-03 UTC）
 
 Implemented: 修复keyed fade在60 ms往返中累积多个outro层的问题。新增纯presentation ContentBlend，最多current/previous两层；反向交换层并保留当前权重，同圈重入不重启动画，第三设备中断仅保留占主导的旧层。移除内容outro，单壳/尖角动效保持；isolated plus-lighter合成避免共同文字在crossfade中因常规alpha叠加变暗。正常crossfade仍会短暂显示两份不同内容，这是预期过渡，不再累积第三层。

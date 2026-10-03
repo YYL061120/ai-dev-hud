@@ -24,5 +24,6 @@ RELEASE.md
 # 项目内部目录
 /.worktrees/
 /.codegraph/
+/.tmp/
 aiusage-data/
 blog/

@@ -1,0 +1,71 @@
+// Production renderer, synthetic official observations. No account, logs or credentials are read.
+const { chromium } = require(process.env.AI_DEV_HUD_PLAYWRIGHT_PATH || 'playwright')
+const fs = require('node:fs'), path = require('node:path'), http = require('node:http'), assert = require('node:assert/strict'), { pathToFileURL } = require('node:url')
+const root = path.resolve(__dirname, '..'), evidence = process.env.AI_DEV_HUD_HOVER_EVIDENCE_DIR || fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'subscription-rings-'))
+fs.mkdirSync(evidence, { recursive:true })
+let browser, server
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
+async function run() {
+  const domain = await import(pathToFileURL(path.join(root, 'packages/core/dist/index.js')).href), now = new Date(), local = 'a'.repeat(64), remote = 'b'.repeat(64)
+  const row = (tool, index, days = 0) => ({ deviceKey: index === 20 ? remote : local, recordKey: String(index + 1).padStart(64,'0'), projectKey:null, sessionKey:null, ts:+now - days * 86400000, updatedAt:+now, tool, model:`fixture-model-${index}`, provider:tool === 'claude-code' ? 'anthropic' : 'openai', platform:index === 20 ? 'darwin' : 'win32', inputTokens:1000, outputTokens:100, cacheReadTokens:0, cacheWriteTokens:0, thinkingTokens:0, cost:0, costSource:'unknown' })
+  const rows = [row('claude-code',0), row('codex',1), row('codex',2,3), row('codex',20), row('aider',3), row('cursor',4), row('opencode',5)]
+  const subscriptions = [domain.normalizeCodexRateLimits({rateLimitsByLimitId:{codex:{primary:{usedPercent:12,windowDurationMins:180,resetsAt:(+now+3600000)/1000},secondary:{usedPercent:35,windowDurationMins:10080,resetsAt:(+now+86400000)/1000}}}},+now), domain.normalizeClaudeStatusline({rate_limits:{five_hour:{used_percentage:30,resets_at:(+now+3600000)/1000},seven_day:{used_percentage:55,resets_at:(+now+86400000)/1000}}},+now)]
+  const rings = Object.fromEntries(['today','seven','thirty','lifetime'].map(period=>[period,{...domain.buildUsageRings(rows,local,period,new Map([[remote,{source:'imported',importedAt:+now}]]),undefined,undefined,now),subscriptions}]))
+  const renderer=path.join(root,'packages/widget/dist/renderer')
+  server=http.createServer((req,res)=>{const file=path.resolve(renderer,req.url==='/'?'index.html':decodeURIComponent(req.url.slice(1))); if(!file.startsWith(renderer+path.sep)){res.writeHead(403).end();return}try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file))}catch{res.writeHead(404).end()}})
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
+  browser=await chromium.launch({executablePath:process.env.AI_DEV_HUD_BROWSER_PATH||'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',headless:true})
+  const errors=[],checks=[]
+  for(const reduced of [false,true]) {
+    const context=await browser.newContext({viewport:{width:376,height:536},reducedMotion:reduced?'reduce':'no-preference',locale:'zh-CN'})
+    await context.addInitScript(({rings})=>{
+      let data={status:'ready',today:{tokens:100,sessions:0,usageRecords:0,cost:0},week:{tokens:200,sessions:0,usageRecords:0,cost:0},models:[],updatedAt:Date.now(),rings},state={expanded:false,displayId:0,reveal:1,hoverEnabled:true},dataListener,stateListener
+      window.setFixtureSubscriptions=subscriptions=>{data={...data,rings:Object.fromEntries(Object.entries(data.rings).map(([key,value])=>[key,{...value,subscriptions}]))};dataListener?.(data)}
+      window.hud={enabled:true,refresh:async()=>data,getState:async()=>state,setExpanded:async expanded=>{state={...state,expanded};stateListener?.(state);return state},setRegions:()=>{},openDashboard:async()=>{},onDataUpdate:fn=>{dataListener=fn;return()=>{}},onStateUpdate:fn=>{stateListener=fn;return()=>{}}}
+    },{rings})
+    const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));await page.goto(`http://127.0.0.1:${server.address().port}`)
+    const localIcon=page.locator('.rail [data-testid="usage-ring"]').first(), remoteIcon=page.locator('.rail [data-testid="usage-ring"]').nth(1)
+    await localIcon.waitFor()
+    assert.equal(await localIcon.locator('.track').count(),5)
+    assert.deepEqual(await localIcon.locator('.track').evaluateAll(elements=>elements.map(element=>element.dataset.tool)),['claude-code','codex','aider','cursor','opencode'])
+    assert.equal(await localIcon.locator('.arc').count(),2)
+    assert.deepEqual(await localIcon.locator('.arc').evaluateAll(elements=>elements.map(element=>element.getAttribute('stroke-dashoffset'))),['45','65'])
+    assert.equal(await remoteIcon.locator('.arc').count(),0,'Shared account limits must never be copied onto an imported device')
+    assert.equal(await page.locator('.rail .periods').count(),0,'Default dock has no time toolbar')
+    await page.screenshot({path:path.join(evidence,`subscription-default-${reduced?'reduced':'motion'}.png`)})
+    await localIcon.hover();await page.getByTestId('ring-detail').waitFor();await pause(300)
+    const detail=page.locator('.rail [data-testid="ring-detail"]')
+    assert((await detail.innerText()).includes('账号共享'))
+    assert((await detail.innerText()).includes('金额未知'))
+    assert(!(await detail.innerText()).match(/API 等价费用|采集记录|会话数/))
+    assert((await detail.innerText()).includes('3 小时窗口'),'Actual duration must not be mislabeled 5 hours')
+    const before=await detail.locator('.big').innerText()
+    await detail.getByTestId('hud-period-seven').click();await pause(340)
+    assert((await detail.locator('header small').innerText()).includes(new Date(rings.seven.since).toLocaleDateString('zh-CN')),'Displayed dates must update with the selected statistics period')
+    assert.notEqual(await detail.locator('.big').innerText(),before,'Period must filter local usage')
+    assert.deepEqual(await localIcon.locator('.arc').evaluateAll(elements=>elements.map(element=>element.getAttribute('stroke-dashoffset'))),['45','65'],'Statistics period must not redefine subscription windows')
+    await detail.locator('.detail-body').evaluate(element=>element.scrollTop=element.scrollHeight)
+    assert((await detail.locator('.detail-body').evaluate(element=>element.scrollTop))>0,'Models and extra tools are scrollable')
+    await detail.locator('.detail-body').evaluate(element=>element.scrollTop=0)
+    await page.screenshot({path:path.join(evidence,`subscription-hover-${reduced?'reduced':'motion'}.png`)})
+    await page.getByTestId('hud-toggle').click();await pause(300)
+    assert.equal(await page.locator('.summary .periods').count(),0,'Period toolbar is outside more-details panel')
+    assert.equal(await page.locator('.summary [data-testid="tool-details"]').count(),1)
+    assert(!(await page.locator('.summary').innerText()).includes('API 等价费用'))
+    await page.screenshot({path:path.join(evidence,`subscription-panel-${reduced?'reduced':'motion'}.png`)})
+    await page.getByTestId('hud-toggle').click();await pause(300)
+    await page.evaluate(subscriptions=>window.setFixtureSubscriptions(subscriptions.map(subscription=>({...subscription,observedAt:Date.now()-3600000}))),subscriptions)
+    assert.equal(await localIcon.locator('.arc').count(),0,'Stale observations must not draw numeric progress')
+    await localIcon.hover();await detail.waitFor();await pause(250)
+    assert((await detail.innerText()).includes('已过期'))
+    await page.screenshot({path:path.join(evidence,`subscription-stale-${reduced?'reduced':'motion'}.png`)})
+    await page.evaluate(()=>window.setFixtureSubscriptions([]));await pause(180)
+    assert.equal(await localIcon.locator('.arc').count(),0)
+    assert((await detail.innerText()).includes('套餐额度未知'))
+    await page.keyboard.press('Escape');await detail.waitFor({state:'detached'})
+    checks.push({reduced,multipleTools:5,accountShared:true,importedQuotaNotAllocated:true,unknownAndStale:true,periodIndependent:true,missingCostNotZero:true,scrollable:true,independentPanel:true})
+    await context.close()
+  }
+  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(evidence,'subscription-ui.json'),JSON.stringify({synthetic:true,productionRenderer:true,checks,errors},null,2));console.log(JSON.stringify({checks,errors,evidence}))
+}
+run().catch(error=>{console.error(error);process.exitCode=1}).finally(async()=>{await browser?.close();server?.close()})

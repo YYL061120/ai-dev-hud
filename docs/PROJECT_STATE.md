@@ -1,8 +1,8 @@
 # 项目状态
 
-更新：2026-10-03。Phase 0、Phase 1 及追加范围已完成；真实使用反馈的隐藏唤起区问题已修复并在实际常驻实例复验。后续阶段禁止提前实现。
+更新：2026-10-03。Phase 0/1 完成，主屏 HUD 已由用户确认滑出。用户追加的本地控制中心两批功能已完成自动验收，当前分支 `feat/local-control-center`；已加载实际 Dashboard 新服务。近期会话接口、真实 Codex 终端点击验收、云后端与视觉深化尚未完成。具体最新状态见文末“本地控制中心追加”；下方保留历史问题和验证记录。
 
-## 主屏使用反馈：配置和代码修复完成，三处原生验收尚未完成
+## 历史主屏使用反馈：修复后的用户手动验收已确认可滑出
 
 - 用户再次明确要求主屏使用。上一轮结论仅验证副屏，不满足此要求。开始只读检查时，PID80076仍存活，原生窗口已经位于主屏；不能仅据前一轮副屏目标推断这次原因。实际widget-settings.json不存在，显示器选择未持久化；主副屏接缝的原8 DIP触发带也容易被直接跨过。
 - 最小修复：默认主屏、保存/恢复hudDisplayId、已失效选择回主屏，原widget保存设置保留HUD选择；触发带增至32 DIP，最后8 DIP仍点击穿透，rail按钮仍可点击，140ms防误触保留。Dashboard双语和parser未修改。
@@ -135,4 +135,23 @@ Three highest-priority manual tests:
 
 验证：core/web/CLI 构建通过；项目边界测试 7/7；完整测试 1094 passed、1 个原有 POSIX permission skip、0 failed。Windows Edge headless 在独立 profile/临时 Git 工程实测登记/发现/引擎/Git/文档/六种预览/复制/中英持久化/注销保留文件/恶意 Origin 拒绝，原 provider 汇总保持 Codex120+Claude40=160。证据在仓库外 `control-batch1-gui.json`、`control-batch1-home.png`、`control-batch1-full-tests.log`。没有替用户点击真实 Codex 启动按钮，实际交互终端与认证需手动验收；会话元数据未完成。
 
-第二批用量汇总及 metadata adapter 尚在实施；本节优先于下方历史状态。
+第二批完成：SQLite local-origin 记录与显式导入的 metadata 汇总；本机日历今日/滚动7天/30天/累计；模型/设备/项目标识、会话/用量记录、日活动与 API 等价 cost。已登记项目名称仅在本地映射显示，不进入导出。版本1传输白名单，标识散列，不含 sourceFile/cwd/hostname/原始session ID/正文/凭据；10 MiB 与50,000条限制。导入独立 `hud_usage_metadata` 表，事务、写队列、设备+记录去重、新版本更新/同版本冲突报告，本机 parser 记录优先。复用 `state.json` 稳定设备身份，尚未 init 时创建上游标准身份，保留已有文件。同步只提供 replaceable interface，未实现网络 adapter；本页只含本机和显式导入数据，不混入上游已有 cloud/synced_records。
+
+最终验证：`pnpm.cmd build` core/web/CLI/widget 全通过；`pnpm.cmd test` 1104 passed / 1 原有 skip / 0 failed（core121、web39、CLI852、widget54、site38；123 test files）。新增领域4、存储/API6测试与第一批7测试均通过。Windows Edge 批2验证160→重复导入仍160→另一设备120后280、3个设备隔离会话、下载、安全字段、本地项目标签、首次设备初始化、原 provider160与语言持久化；截图已实际查看。首次 GUI 暴露缺失设备初始化，已修复；之后测试错误假设SQL首行是Codex，改为明确选已知Codex fixture，没有放宽验收。
+
+实际用户服务：旧本仓库Dashboard PID65912经精确命令核验后重启为PID45928，127.0.0.1:3847，`/api/local/codex` 与 `/api/local/usage` 可用；新旧实际今日token聚合相等，恶意Origin403。HUD PID42052未停止；只读原生窗口仍在主屏右缘、84物理px宽（56DIP×150%），隐藏状态正常，widget源文件相对已验收分支无差异。未替用户点击真实Codex终端，不自动发出AI请求。
+
+证据：仓库外 `control-batch2-gui.json` / `control-batch2-usage.png` / `control-final-tests.log` / `control-batch2-full-build.log` / `control-live-readiness.json` / `control-live-stat-crosscheck.json`。实际运行数据、临时工程和截图均未进入Git或远端。当前两批完成后停止；不部署云。
+
+Implemented: 本地项目上下文、Codex Home/任务提示预览复制/显式启动入口；本地用量/版本化metadata导入导出/去重/同步接口。
+
+Not completed: 最近会话元数据集成；真实交互终端手动验收；大历史分块导出；跨设备项目自动归并/设备别名；云传输；视觉与交互深化。
+
+Files changed: core local-control/usage-metadata；CLI local-control 项目/launcher/usage 与 API handler；web codex/local-usage、typed clients/字典/导航/preprocess；新增测试与harness文档。
+
+Tests: 两批Windows Edge、完整build/tests、实际常驻HUD只读检查、新旧Dashboard聚合和Origin保护；真实Codex只执行version/help，没有启动AI会话。
+
+Three highest-priority manual tests:
+1. 登记一个自己的工程，核对引擎/Git/约定文档，预览并复制任务提示，再注销，确认工程文件仍在。
+2. 点击“在所选项目打开Codex”，确认终端工作目录与认证；自行粘贴提示前应没有自动AI请求。
+3. 导出用量metadata并重复导入，再从另一设备显式导入；核对日期/设备/项目统计，同时检查主屏HUD与原Dashboard仍正常。

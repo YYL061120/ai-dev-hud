@@ -2,6 +2,8 @@
 
 ## 上游基础
 
+第二批扩展：core `usage-metadata.ts` 提供白名单版本、严格校验、日历汇总与可替换同步契约；CLI `UsageMetadataStore` 只读local-origin records的字段投影、散列身份，并以独立metadata表接收显式导入；API复用原SQLite写队列，web `/local-usage` 只使用typed client。不存在默认网络adapter，实际状态与限制见 `USAGE_METADATA.md`。缺少state.json时只创建上游标准稳定身份，既有状态文件不覆盖。
+
 最新本地扩展：core `local-control.ts` 定义项目/启动契约；CLI `local-control/` 处理文件/Git/登记与交互启动，`api/local-control.ts` 在既有认证/同源保护后增加本机限定；web `/codex` 消费 typed client。登记持久化在用户 `.aiusage/projects.json`，与 usage/sync 数据分开。提示预览只引用约定文档，不自动嵌入内容或发出 AI 请求。下方“不做”是历史 Phase 1 范围，新用户追加按 `LOCAL_CONTROL_PLAN.md` 推进。
 
 AIUsage 是 pnpm workspace，另有 `packages/site` 承担官方网站/云账号等功能。本产品本轮不依赖它。

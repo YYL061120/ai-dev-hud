@@ -22,6 +22,7 @@
         { path: '/',           key: 'nav.home',      icon: House },
         { path: '/overview',   key: 'nav.overview',  icon: LayoutDashboard },
         { path: '/codex',      key: 'control.home',  icon: FolderKanban },
+        { path: '/local-usage', key: 'control.usage', icon: Coins },
       ]
     },
     {

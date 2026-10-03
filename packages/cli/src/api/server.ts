@@ -8,6 +8,9 @@ import { calculateCostForPrice, removePriceOverride, inferProvider, normalizeQod
 import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig } from '../config.js'
 import { browserProtocol, isTrustedApiRequest } from './trust.js'
 import { createLocalControlHandler } from './local-control.js'
+import { UsageMetadataStore } from '../local-control/usage.js'
+import { ensureAiusageDir, getState } from '../init.js'
+import { LocalControlError } from '../local-control/projects.js'
 import { credentialStatus, publicSyncConfig, setSyncCredentials } from './credential-settings.js'
 import { createGitHubDeviceSessions } from '../github/device-sessions.js'
 import { safeGitHubError, validateRepo } from '../github/auth.js'
@@ -612,7 +615,6 @@ function summaryTotalsPayload(totals: SummaryTotals): SummaryTotals {
 }
 
 export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
-  const localControl = createLocalControlHandler()
   registerLocalDayFunction(db)
   const githubDeviceAction = createGitHubDeviceSessions()
   const cfg = loadConfig()
@@ -620,6 +622,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
   const dashboardPassword = getDashboardPassword()
   const localWriteQueue = new AsyncTaskQueue()
   const runDbWrite = options?.runDbWrite ?? (<T>(task: () => T | Promise<T>) => localWriteQueue.run(task))
+  const localControl = createLocalControlHandler(undefined, () => {
+    let id = options?.currentDeviceInstanceId ?? getState(AIUSAGE_DIR)?.deviceInstanceId
+    if (!id || id === 'unknown') {
+      // Existing AIUsage can serve before init; create its standard persistent identity once.
+      // ensureAiusageDir preserves an existing (including malformed) state file.
+      ensureAiusageDir(AIUSAGE_DIR)
+      id = getState(AIUSAGE_DIR)?.deviceInstanceId
+    }
+    if (!id || id === 'unknown') throw new LocalControlError('Stable local device identity is not initialized', 503)
+    return new UsageMetadataStore(db, id)
+  }, runDbWrite)
   const getDbWriteQueueStatus = options?.getDbWriteQueueStatus ?? (() => localWriteQueue.getStatus())
   let pricingRecalcStatus = emptyPricingRecalcStatus()
   let pricingNeedsRecalcSince: number | null = null

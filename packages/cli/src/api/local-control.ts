@@ -4,6 +4,7 @@ import { isLoopbackHost } from './trust.js'
 import { AIUSAGE_DIR } from '../config.js'
 import { ProjectRegistry, discoverProjects, inspectProject, kickoff, LocalControlError, readProjectDocument } from '../local-control/projects.js'
 import { codexStatus, launchCodex } from '../local-control/launcher.js'
+import type { UsageMetadataStore } from '../local-control/usage.js'
 export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new LocalControlError('JSON content type required', 415)
   const chunks: Buffer[] = []; let bytes = 0
@@ -15,7 +16,7 @@ export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024
   } catch { throw new LocalControlError('Invalid JSON') }
 }
 export const reply = (res: http.ServerResponse, body: unknown, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)) }
-export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json'))) {
+export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json')), usage?: () => UsageMetadataStore, runWrite: <T>(task: () => T | Promise<T>) => Promise<T> = async task => task()) {
   return async (req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> => {
     if (!url.pathname.startsWith('/api/local/')) return false
     try {
@@ -23,7 +24,27 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
       const remote = req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? ''
       if (!isLoopbackHost(remote) || !isLoopbackHost(new URL(`http://${req.headers.host}`).hostname)) throw new LocalControlError('Local computer access required', 403)
       const route = url.pathname.slice('/api/local/'.length)
-      if (route === 'projects' && req.method === 'GET') reply(res, { projects: await registry.list() })
+      if (route.startsWith('usage')) {
+        if (!usage) throw new LocalControlError('Usage service unavailable', 503)
+        const store = usage()
+        if (route === 'usage' && req.method === 'GET') {
+          const period = url.searchParams.get('period') ?? 'thirty'
+          if (!['today', 'seven', 'thirty', 'lifetime'].includes(period)) throw new LocalControlError('Invalid usage period')
+          const device = url.searchParams.get('device') || undefined, project = url.searchParams.get('project') || undefined
+          if ((device && !/^[a-f0-9]{64}$/.test(device)) || (project && project !== 'unknown' && !/^[a-f0-9]{64}$/.test(project))) throw new LocalControlError('Invalid metadata filter')
+          const overview = store.overview(period, device, project)
+          overview.projectLabels = Object.fromEntries((await registry.list()).map(item => [store.projectKeyFor(item.path), item.name]))
+          reply(res, overview)
+        } else if (route === 'usage/export' && req.method === 'GET') {
+          const transfer = store.export()
+          res.setHeader('Content-Disposition', 'attachment; filename="ai-dev-hud-usage-metadata-v1.json"')
+          reply(res, transfer)
+        } else if (route === 'usage/import' && req.method === 'POST') {
+          const transfer = await boundedJson(req, 10 * 1024 * 1024)
+          reply(res, await runWrite(() => store.import(transfer)))
+        } else throw new LocalControlError('Method not allowed', 405)
+      }
+      else if (route === 'projects' && req.method === 'GET') reply(res, { projects: await registry.list() })
       else if (route === 'projects' && req.method === 'POST') reply(res, { project: await registry.register((await boundedJson(req)).path) })
       else if (route === 'discover' && req.method === 'POST') reply(res, await discoverProjects((await boundedJson(req)).path))
       else if (route === 'codex' && req.method === 'GET') reply(res, await codexStatus())

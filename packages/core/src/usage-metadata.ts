@@ -40,7 +40,7 @@ export function validateUsageTransfer(value: unknown): UsageMetadataTransfer {
   return value as UsageMetadataTransfer
 }
 export const safeUsageIdentifier = (value: unknown, kind: 'model' | 'provider' = 'model'): string => (kind === 'provider' ? providerIdentifier(value) : identifier(value)) ? value as string : 'unknown'
-export interface UsageTotals { tokens: number; cost: number; records: number; sessions: number }
+export interface UsageTotals { tokens: number; cost: number; records: number; sessions: number; estimatedCost?: number | null; missingEstimates?: number }
 export interface UsageBreakdown extends UsageTotals { key: string }
 export interface UsageOverview {
   rings?: UsageRingsSnapshot
@@ -53,7 +53,9 @@ export interface UsageOverview {
 }
 export const usageTokens = (r: UsageMetadataRecord) => r.inputTokens + r.outputTokens + r.cacheReadTokens + r.cacheWriteTokens + r.thinkingTokens
 export function usageTotals(records: UsageMetadataRecord[]): UsageTotals {
-  return { tokens: records.reduce((s, r) => s + usageTokens(r), 0), cost: records.reduce((s, r) => s + r.cost, 0), records: records.length, sessions: new Set(records.flatMap(r => r.sessionKey ? [`${r.deviceKey}:${r.tool}:${r.sessionKey}`] : [])).size }
+  const estimated = records.filter(record => record.costSource !== 'unknown')
+  return { tokens: records.reduce((s, r) => s + usageTokens(r), 0), cost: records.reduce((s, r) => s + r.cost, 0), records: records.length, sessions: new Set(records.flatMap(r => r.sessionKey ? [`${r.deviceKey}:${r.tool}:${r.sessionKey}`] : [])).size,
+    estimatedCost: estimated.length ? estimated.reduce((sum, record) => sum + record.cost, 0) : null, missingEstimates: records.length - estimated.length }
 }
 export function localDay(ts: number): string { const date = new Date(ts); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 /** Calendar arithmetic handles local midnight and DST; rolling windows include today. */

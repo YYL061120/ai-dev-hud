@@ -5,6 +5,17 @@ import { join } from 'node:path'
 import { captureClaudeSubscription, readClaudeSubscription } from '../src/local-control/subscriptions.js'
 async function* input(value: unknown) { yield Buffer.from(JSON.stringify(value)) }
 describe('passive official statusline adapter', () => {
+  it.each([72, null])('does not let delayed old capture overwrite a newer observation (%s)', async percentage => {
+    const directory = await mkdtemp(join(tmpdir(), 'hud-subscription-race-'))
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    async function* delayed() { await gate; yield JSON.stringify({ rate_limits: { seven_day: { used_percentage: 11 } } }) }
+    const old = captureClaudeSubscription(delayed(), directory)
+    await new Promise(resolve => setTimeout(resolve, 5))
+    await captureClaudeSubscription(input(percentage === null ? {} : { rate_limits: { seven_day: { used_percentage: percentage } } }), directory)
+    release(); await old
+    expect((await readClaudeSubscription(directory))?.windows.map(window => window.usedPercent)).toEqual(percentage === null ? [] : [72])
+  })
   it('persists only the quota allowlist, never prompt/context/cost/credentials, and does not accumulate usage', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'hud-subscription-'))
     const fixture = { rate_limits: { seven_day: { used_percentage: 25, resets_at: Math.floor(Date.now() / 1000) + 86400 } }, prompt: 'PRIVATE_PROMPT', credentials: 'PRIVATE_SECRET', context_window: { total_input_tokens: 1000, used_percentage: 80 } }

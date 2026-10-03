@@ -1,5 +1,33 @@
 # 项目状态
 
+## 追加推进：真实 Codex stdio 额度接通与缺失费用修复（2026-10-03 UTC）
+
+Implemented:
+按用户追加授权继续官方连接诊断。现有 daemon control socket 仍不可连接（exit1，dead network/os10050），但官方短时 `app-server --listen stdio://` 实测成功：initialize→initialized→account/rateLimits/read，返回2个真实窗口；整次349ms，结果至stdin EOF正常exit0约17ms。客户端不读/复制凭据、不发login或token-refresh、不创建thread/turn、不启持久daemon或网络监听、不增加持久授权。现有CLI自身使用既有登录；本轮只对该进程临时关闭analytics，不改配置文件。新增有界stdio fallback（查询5秒/退出1秒），现有daemon优先；每分钟缓存/合并并发，不逐帧或按四周期重复启动。正常stdio等待EOF退出，仅超时终止自己创建的子进程；server要求外部token刷新时直接返回未知，不供应凭据。
+
+修复旧本地用量页的汇总卡和model/device/project金额表：领域 UsageTotals 附加 estimatedCost|null/missingEstimates，保留旧cost数字及传输/解析语义；无估算显示未知，真实pricing/log零值仍可显示0，混合缺失提示部分估算。hover分组保留tool/provider/model三重身份及所有token类别，补跨工具同模型/跨provider/部分费用测试。正式API实测 groupTokensEqualDevice=true、groupModelsComplete=true。
+
+Not completed:
+Claude尚未配置capture：只提供用户可显式启用的CLI适配器和组合原statusline的可审查方案。需要把现有脚本收到的同一JSON分支送进 capture-claude-limits，之后继续原脚本输出；不会直接以捕获命令替换原statusline。设置变更未授权，未改Claude settings/statusline、安全/隐私设置或请求模型响应。需要实际启用配置时由用户明确选择，不能冒称已接通。真实物理pointer/背景点击投递仍未测。
+
+两张参考图继续阻塞：先现场核对原目标为空，再使用当前官方helper对明确本机 `.tmp/reference-images-followup` 重试一次；仍为 os.setxattr AttributeError，两个最终目标exists=false，未绕过helper/权限、未查看图。新版先前可用合成截图Library ID仍为libfile_bd9eb0826b2c8191bac4a5d77a5cc016；本轮不上传实际账号额度或私人用量截图。
+
+Files changed:
+CLI local-control/subscriptions.ts与subscription-proxy.test.ts；core usage-metadata.ts、usage-metadata/usage-rings测试；web本地用量页；verify-ring-layout.cjs费用断言；SUBSCRIPTION_RINGS_PLAN、PROJECT_STATE、HANDOFF、ARCHITECTURE。
+
+Tests:
+最终build exit0；完整test exit0，1151passed/1既有POSIX skip/0failed，132files（core133/CLI869/web52/widget59/site38）。4条新增测试覆盖stdio EOF正常退出、拒绝token-refresh、费用unknown/真实0/部分缺失以及跨tool/provider同名model和全部token类别。生产额度2组normal/reduced通过；16组页面/多设备布局通过，汇总卡及所有model/device/project金额单元均保留未知，0pageerror。大历史/去重完整测试仍通过，Electron staged与Node SQLite绑定验证通过。此前悬停与真实150%/100%原生检查证据仍适用：本次未改其窗口/动效/交互实现。
+
+证据在C:\AI-Tools\ai-dev-hud-evidence\subscription-rings：codex-stdio-diagnostic.json（真实白名单窗口，不入Git）、codex-daemon-probe.json、codex-stdio-initial-diagnostic.json（初次诊断被stderr字节阈值提前中断；未保存raw stderr，改为排空丢弃后成功）、library-reference-retry.json、resident-followup-api.json；followup子目录包含生产JSON/PNG及最终build/test/layout/quota日志。无原始日志、提示、回复、凭据或私有DB提交/上传。
+
+正式恢复：HUD72944、Dashboard5872/3847，auth/status200、usage200、真实设备1；CodexWindows2、codexStates=[available,available]、ClaudeConnected=false。主屏偏好1220717916和设置SHA256 0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2不变。本次为0cc3de8之后的独立修复提交，最终SHA/远端由git核对，不改写历史。
+
+Three highest-priority manual tests:
+1. 在真实账号上核对Codex各bucket/实际window/reset、到期回未知及账号切换，确认短时stdio退出且无持久daemon。
+2. 用户明确启用Claude组合方案后核对原statusline输出保持、首个响应后的5h/7d与独立缺失；拒绝新认证/凭据处理。
+3. 物理两屏pointer/click-through与实际数据金额unknown/真实0/部分缺失、跨provider模型，以及历史传输和项目功能。
+
+
 ## 新阶段：工具套餐同心环与独立更多详情（2026-10-03 UTC）
 
 起点实测为 `15ee57f`，分支 `feat/local-control-center`，初始工作区干净；ARCHITECTURE/HANDOFF 位于 docs，仓库现场无 .agents 目录。实施方案见 `docs/SUBSCRIPTION_RINGS_PLAN.md`；以下替代旧设备份额弧的 UI 说明，metadata/API 的原采集份额字段仍保留兼容。
@@ -348,3 +376,25 @@ Three highest-priority manual tests:
 最终 `pnpm.cmd build` exit0；`pnpm.cmd test` 1109 passed、1原有skip、0failed、123files（core123、CLI855、web39、widget54、site38）。本地安全回归6领域+7usage+9项目通过，Windows Launcher及控制中心原160/280统计、复制、语言、文件传输、原Dashboard回归通过。一次验收工具把全机新增Codex PID误当额外终端，已改为精确临时目录范围，同时保留原400/409/无测试终端断言与既有进程保留检查；没有放宽产品断言。
 
 实际服务PID48048加载修复，127.0.0.1:3847；新旧真实今日tokens仍一致；HUD42052保留。本轮不实现会话元数据或云传输。证据在仓库外：`launcher-real-verification.json`、`launcher-button-feedback.png`、`launcher-error-feedback.png`、`launcher-junction-rejected.png`、`review-fixes-full-build.log`、`review-fixes-full-tests.log`、`review-fixes-control-gui.log`、`review-fixes-live-readiness.json`。未上传测试export/截图/DB/真实内容。
+## 独立审查修复与额度归属降级（2026-10-03 UTC，优先于下方历史结论）
+
+Implemented:
+修复 0cc3de8 审查的三项问题。额度显示必须同时具备观察携带的 opaque generation 与当前已确认登录代际，缺证明、登出、切号、迟到旧账号响应均为 unknown；旧 bucket/reset 元数据也不显示。现有 Codex proxy/短时 stdio 与 Claude statusline 只能提供窗口，不能证明当前账号登录代际，服务边界因此移除其 windows，不将缓存或设备身份当账号证明。没有读取或保存凭据、邮箱、账号原始身份。
+
+Claude capture 使用跨进程 mkdir 锁，在同一临界区比较入口 observedAt 后原子替换；较新的空窗口也阻止旧快照覆盖。锁等待有界，失败保留未知，不强行删除别人持有的锁。Codex 不合法 bucket ID 拒绝整份观察，避免安全化成同一 unknown 后错误选择百分比。
+
+短时官方 stdio 查询、费用缺失语义和完整模型分组一并交付：真实查询可用，查询进程正常 stdin EOF 退出；模型/设备/项目估算缺失显示未知，合法零费用仍保留。不会重复导入或累计观察。
+
+Not completed:
+真实账号登录代际接入尚未完成，正式额度圈均诚实未知；下方“Codex 2 个 available”仅为此前阶段观察，不代表当前正式显示或账号归属已通过。Claude 未修改用户 statusline 设置，组合接入须保留原输出，具体方案见 SUBSCRIPTION_RINGS_PLAN。原两张参考图经支持流程一次明确本机路径重试仍因官方 helper 的 Windows os.setxattr 不可用未落地，未查看或绕过。物理鼠标、点击穿透、双屏跨缝投递仍未实测；150%/100% 为屏幕枚举及原生控制器注入证据，不等同物理输入通过。
+
+Files changed:
+core subscription-usage/usage-rings/usage-metadata 与测试；CLI subscriptions 与 capture/proxy 测试；共用 UsageRings/UsageToolDetails、本地用量页；生产 UI 和固定 Git 提交回归脚本；架构、计划与交接文档。
+
+Tests:
+最终全量 build exit0；全量 test exit0：1155 passed / 1 原有 Windows POSIX skip / 0 failed，132 files。生产 renderer 的切号/登出/旧响应、未知/过期、周期与 reset 独立、多工具、滚动、键盘和 reduced-motion，以及 16 组布局回归另记交接最终验证记录。固定 SHA 脚本只读取 git show 的源码、生成隔离临时模块，真实双进程测试 capture；不读取用户登录或日志。
+
+Three highest-priority manual tests:
+1. 接入可靠登录代际后，真实切号/登出及迟到 A 响应必须立即保持未知，确认账号共享范围与 reset。
+2. 用户授权 Claude 原 statusline 组合后，验证保留原输出、跨进程捕获顺序及较新空快照失效。
+3. 150% 主屏与 100% 副屏物理鼠标测试跨缝、快速反向、第三目标、外侧 8 DIP 点击穿透及键盘详情滚动。

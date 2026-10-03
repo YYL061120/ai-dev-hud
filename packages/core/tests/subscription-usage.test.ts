@@ -20,10 +20,25 @@ describe('official account subscription observations', () => {
       expect(subscriptionWindowState(value, value.windows[0], now)).toBe('unknown')
     }
     const value = normalizeCodexRateLimits({ rateLimits: { primary: { usedPercent: 0, resetsAt: (now + 1000) / 1000 } } }, now)
-    expect(subscriptionWindowState(value, value.windows[0], now)).toBe('available')
-    expect(subscriptionWindowState(value, value.windows[0], now + 1000)).toBe('stale')
-    expect(subscriptionWindowState(value, value.windows[0], now + SUBSCRIPTION_FRESHNESS_MS + 1)).toBe('stale')
-    expect(subscriptionWindowState({ ...value, observedAt: now + 60_000 }, value.windows[0], now)).toBe('stale')
+    value.generation = 'fixture-A'
+    expect(subscriptionWindowState(value, value.windows[0], now, 'fixture-A')).toBe('available')
+    expect(subscriptionWindowState(value, value.windows[0], now + 1000, 'fixture-A')).toBe('stale')
+    expect(subscriptionWindowState(value, value.windows[0], now + SUBSCRIPTION_FRESHNESS_MS + 1, 'fixture-A')).toBe('stale')
+    expect(subscriptionWindowState({ ...value, observedAt: now + 60_000 }, value.windows[0], now, 'fixture-A')).toBe('stale')
+  })
+  it('fails closed without current login proof, after logout, switching and late old responses', () => {
+    const value = normalizeCodexRateLimits({ rateLimits: { primary: { usedPercent: 72 } } }, now)
+    expect(subscriptionWindowState(value, value.windows[0], now, 'A')).toBe('unknown')
+    value.generation = 'A'
+    expect(subscriptionWindowState(value, value.windows[0], now, 'A')).toBe('available')
+    for (const current of ['B', null, undefined]) expect(subscriptionWindowState(value, value.windows[0], now, current)).toBe('unknown')
+  })
+  it('rejects invalid bucket identities instead of merging them with a legitimate unknown bucket', () => {
+    for (const ids of [['bucket one', 'bucket two'], ['unknown', 'bucket two']]) {
+      const value = normalizeCodexRateLimits({ rateLimitsByLimitId: Object.fromEntries(ids.map(id => [id, { primary: { usedPercent: 72 }, secondary: { usedPercent: 11 } }])) }, now)
+      expect(value.windows).toEqual([])
+      expect(subscriptionRingWindow(value)).toBeUndefined()
+    }
   })
   it('uses only Claude subscription fields, tolerates missing windows and ignores gateway spend/context/cost', () => {
     const value = normalizeClaudeStatusline({ context_window: { used_percentage: 99 }, cost: { total_cost_usd: 20 }, rate_limits: { seven_day: { used_percentage: 42, resets_at: (now + 1000) / 1000 }, spend_limit: { used_percentage: 100, period: 'monthly' } }, secret: 'never-retained' }, now)

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { lang, getLocale, t } from '$lib/i18n.js'
   import { usageApi } from '$lib/usage-metadata'
-  import type { UsageOverview } from '../../../../core/src/usage-metadata.js'
+  import type { UsageOverview, UsageTotals } from '../../../../core/src/usage-metadata.js'
   import type { UsageExportProgress } from '../../../../core/src/usage-transfer.js'
   import { importUsageFile, type FileImportProgress } from '$lib/usage-file'
   import { beginUsageExport } from '$lib/usage-export-lifecycle'
@@ -15,6 +15,7 @@
   const periods = ['today', 'seven', 'thirty', 'lifetime'] as const
   const number = (value: number, language: string) => value.toLocaleString(getLocale(language))
   const money = (value: number, language: string) => value.toLocaleString(getLocale(language), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 })
+  const estimate = (value: UsageTotals, language: string) => value.estimatedCost === null || value.estimatedCost === undefined ? (language === 'zh' ? '金额未知' : 'Cost unknown') : money(value.estimatedCost, language) + (value.missingEstimates ? (language === 'zh' ? ' · 部分估算' : ' · partial estimate') : '')
   async function operation(work: () => Promise<void>) { if (busy) return; busy = true; error = ''; try { await work() } catch (e) { error = e instanceof Error ? e.message : $t('control.error') } finally { busy = false } }
   async function refresh() {
     data = await usageApi.overview(period, device, project)
@@ -84,14 +85,14 @@
 {JSON.stringify(imported.result, null, 2)}</pre>{#if imported.state === 'failed' || imported.state === 'cancelled'}<p class="hint">{$t('control.partialImport')}{#if imported.uncertain} {$t('control.uncertainImport')}{/if}</p>{/if}{/if}
 {#if data}
 {#if data.rings}<section class="rings-section"><UsageRings snapshot={data.rings} language={$lang}/><p class="hint">{$lang === 'zh' ? '同心环按工具表示官方账号共享套餐已用比例，虚线表示未知或过期。统计时段只筛选设备用量；其他设备可手动导入元数据，未接入不等于用量为零。' : 'Tool rings show official shared-account quota usage; dashed tracks mean unknown or stale. The period filters device usage only. Import other devices manually; unconnected does not mean zero usage.'}</p></section>{/if}
-<div class="totals">{#each periods as p}<section class="card" data-testid={`usage-${p}`}><h2>{$t(`control.${p}`)}</h2><strong>{number(data.periods[p].tokens, $lang)}</strong><p>{$t('control.tokens')}</p><small>{money(data.periods[p].cost, $lang)} · {number(data.periods[p].sessions, $lang)} {$t('control.sessionCount')} · {number(data.periods[p].records, $lang)} {$t('control.records')}</small></section>{/each}</div>
+<div class="totals">{#each periods as p}<section class="card" data-testid={`usage-${p}`}><h2>{$t(`control.${p}`)}</h2><strong>{number(data.periods[p].tokens, $lang)}</strong><p>{$t('control.tokens')}</p><small>{estimate(data.periods[p], $lang)} · {number(data.periods[p].sessions, $lang)} {$t('control.sessionCount')} · {number(data.periods[p].records, $lang)} {$t('control.records')}</small></section>{/each}</div>
 <section class="card"><label for="usage-period">{$t('control.filter')}</label><div class="actions">
   <select id="usage-period" bind:value={period} disabled={busy} on:change={() => operation(refresh)}>{#each periods as p}<option value={p}>{$t(`control.${p}`)}</option>{/each}</select>
   <select aria-label={$t('control.devices')} bind:value={device} disabled={busy} on:change={() => operation(refresh)}><option value="">{$t('control.all')} · {$t('control.devices')}</option>{#each devices as key}<option value={key}>{key.slice(0, 12)}{key === data.currentDeviceKey ? ' · local' : ''}</option>{/each}</select>
   <select aria-label={$t('control.projectUsage')} bind:value={project} disabled={busy} on:change={() => operation(refresh)}><option value="">{$t('control.all')} · {$t('control.projectUsage')}</option>{#each projects as key}<option value={key}>{key === 'unknown' ? $t('control.unknown') : data.projectLabels[key] ?? key.slice(0, 12)}</option>{/each}</select>
 </div><p class="hint">{$t('control.approximate')}</p></section>
 {#each [{ name: 'models', rows: data.models }, { name: 'devices', rows: data.devices }, { name: 'projectUsage', rows: data.projects }] as group}
-<section class="card"><h2>{$t(`control.${group.name}`)}</h2><div class="table-wrap"><table><thead><tr><th>{$t('control.key')}</th><th>{$t('control.tokens')}</th><th>{$t('control.sessionCount')}</th><th>{$t('control.records')}</th><th>{$t('control.cost')}</th></tr></thead><tbody>{#each group.rows as row}<tr><td title={row.key}>{group.name === 'models' ? row.key : row.key === 'unknown' ? $t('control.unknown') : group.name === 'projectUsage' ? data.projectLabels[row.key] ?? row.key.slice(0, 12) : row.key.slice(0, 12)}</td><td>{number(row.tokens, $lang)}</td><td>{number(row.sessions, $lang)}</td><td>{number(row.records, $lang)}</td><td>{money(row.cost, $lang)}</td></tr>{/each}</tbody></table></div></section>
+<section class="card"><h2>{$t(`control.${group.name}`)}</h2><div class="table-wrap"><table><thead><tr><th>{$t('control.key')}</th><th>{$t('control.tokens')}</th><th>{$t('control.sessionCount')}</th><th>{$t('control.records')}</th><th>{$t('control.cost')}</th></tr></thead><tbody>{#each group.rows as row}<tr><td title={row.key}>{group.name === 'models' ? row.key : row.key === 'unknown' ? $t('control.unknown') : group.name === 'projectUsage' ? data.projectLabels[row.key] ?? row.key.slice(0, 12) : row.key.slice(0, 12)}</td><td>{number(row.tokens, $lang)}</td><td>{number(row.sessions, $lang)}</td><td>{number(row.records, $lang)}</td><td>{estimate(row, $lang)}</td></tr>{/each}</tbody></table></div></section>
 {/each}
 <section class="card"><h2>{$t('control.heatmap')}</h2><div class="heatmap">{#each data.heatmap as day}<div class="day" style={`--activity:${Math.min(0.8, 0.1 + Math.log10(day.tokens + 1) / 10)}`} title={`${day.day}: ${number(day.tokens, $lang)} tokens`}><small>{day.day}</small><span>{number(day.tokens, $lang)}</span></div>{/each}</div></section>
 {:else if busy}<p>{$t('common.loading')}</p>{/if}

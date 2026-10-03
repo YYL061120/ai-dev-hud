@@ -49,4 +49,14 @@ describe('sanitized usage metadata domain', () => {
     expect(all.devices).toHaveLength(2); expect(all.models).toHaveLength(2); expect(all.projects.some(p => p.key === 'unknown')).toBe(true); expect(all.selected.sessions).toBe(2)
     expect(aggregateUsage([row(ts), other], 'a'.repeat(64), 'today', 'e'.repeat(64), 'unknown', new Date(ts)).selected.tokens).toBe(130)
   })
+  it('preserves missing estimates and genuine zero across period and table aggregates', () => {
+    const date = new Date(2026, 9, 3, 12), ts = +date
+    const unknown = aggregateUsage([row(ts, { cost: 0, costSource: 'unknown' })], 'a'.repeat(64), 'today', undefined, undefined, date)
+    expect(unknown.periods.today).toMatchObject({ estimatedCost: null, missingEstimates: 1 })
+    expect(unknown.models[0]).toMatchObject({ estimatedCost: null, missingEstimates: 1 })
+    const mixed = aggregateUsage([row(ts, { cost: 0, costSource: 'pricing' }), row(ts, { cost: 0, costSource: 'unknown' })], 'a'.repeat(64), 'today', undefined, undefined, date)
+    expect(mixed.selected).toMatchObject({ estimatedCost: 0, missingEstimates: 1 })
+    expect(mixed.devices[0]).toMatchObject({ estimatedCost: 0, missingEstimates: 1 })
+    expect(mixed.projects[0]).toMatchObject({ estimatedCost: 0, missingEstimates: 1 })
+  })
 })

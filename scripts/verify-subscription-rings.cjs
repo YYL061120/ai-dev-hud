@@ -10,7 +10,9 @@ async function run() {
   const row = (tool, index, days = 0) => ({ deviceKey: index === 20 ? remote : local, recordKey: String(index + 1).padStart(64,'0'), projectKey:null, sessionKey:null, ts:+now - days * 86400000, updatedAt:+now, tool, model:`fixture-model-${index}`, provider:tool === 'claude-code' ? 'anthropic' : 'openai', platform:index === 20 ? 'darwin' : 'win32', inputTokens:1000, outputTokens:100, cacheReadTokens:0, cacheWriteTokens:0, thinkingTokens:0, cost:0, costSource:'unknown' })
   const rows = [row('claude-code',0), row('codex',1), row('codex',2,3), row('codex',20), row('aider',3), row('cursor',4), row('opencode',5)]
   const subscriptions = [domain.normalizeCodexRateLimits({rateLimitsByLimitId:{codex:{primary:{usedPercent:12,windowDurationMins:180,resetsAt:(+now+3600000)/1000},secondary:{usedPercent:35,windowDurationMins:10080,resetsAt:(+now+86400000)/1000}}}},+now), domain.normalizeClaudeStatusline({rate_limits:{five_hour:{used_percentage:30,resets_at:(+now+3600000)/1000},seven_day:{used_percentage:55,resets_at:(+now+86400000)/1000}}},+now)]
-  const rings = Object.fromEntries(['today','seven','thirty','lifetime'].map(period=>[period,{...domain.buildUsageRings(rows,local,period,new Map([[remote,{source:'imported',importedAt:+now}]]),undefined,undefined,now),subscriptions}]))
+  subscriptions.forEach(subscription=>subscription.generation=`fixture-${subscription.tool}`)
+  const subscriptionGenerations=Object.fromEntries(subscriptions.map(subscription=>[subscription.tool,subscription.generation]))
+  const rings = Object.fromEntries(['today','seven','thirty','lifetime'].map(period=>[period,{...domain.buildUsageRings(rows,local,period,new Map([[remote,{source:'imported',importedAt:+now}]]),undefined,undefined,now),subscriptions,subscriptionGenerations}]))
   const renderer=path.join(root,'packages/widget/dist/renderer')
   server=http.createServer((req,res)=>{const file=path.resolve(renderer,req.url==='/'?'index.html':decodeURIComponent(req.url.slice(1))); if(!file.startsWith(renderer+path.sep)){res.writeHead(403).end();return}try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file))}catch{res.writeHead(404).end()}})
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
@@ -21,6 +23,7 @@ async function run() {
     await context.addInitScript(({rings})=>{
       let data={status:'ready',today:{tokens:100,sessions:0,usageRecords:0,cost:0},week:{tokens:200,sessions:0,usageRecords:0,cost:0},models:[],updatedAt:Date.now(),rings},state={expanded:false,displayId:0,reveal:1,hoverEnabled:true},dataListener,stateListener
       window.setFixtureSubscriptions=subscriptions=>{data={...data,rings:Object.fromEntries(Object.entries(data.rings).map(([key,value])=>[key,{...value,subscriptions}]))};dataListener?.(data)}
+      window.setFixtureGeneration=generation=>{data={...data,rings:Object.fromEntries(Object.entries(data.rings).map(([key,value])=>[key,{...value,subscriptionGenerations:Object.fromEntries(['codex','claude-code'].map(tool=>[tool,generation]))}]))};dataListener?.(data)}
       window.hud={enabled:true,refresh:async()=>data,getState:async()=>state,setExpanded:async expanded=>{state={...state,expanded};stateListener?.(state);return state},setRegions:()=>{},openDashboard:async()=>{},onDataUpdate:fn=>{dataListener=fn;return()=>{}},onStateUpdate:fn=>{stateListener=fn;return()=>{}}}
     },{rings})
     const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));await page.goto(`http://127.0.0.1:${server.address().port}`)
@@ -63,6 +66,17 @@ async function run() {
     assert.equal(await localIcon.locator('.arc').count(),0)
     assert((await detail.innerText()).includes('套餐额度未知'))
     await page.keyboard.press('Escape');await detail.waitFor({state:'detached'})
+    await page.evaluate(subscriptions=>window.setFixtureSubscriptions(subscriptions),subscriptions)
+    assert.equal(await localIcon.locator('.arc').count(),2)
+    for(const generation of ['different-account',null]) {
+      await page.evaluate(generation=>window.setFixtureGeneration(generation),generation);await pause(80)
+      assert.equal(await localIcon.locator('.arc').count(),0,'Switching or logout invalidates old account percentages')
+      await page.mouse.move(0,0);await localIcon.hover();await detail.waitFor();await pause(260)
+      assert.equal(await detail.locator('[data-quota-state]').count(),0,'Old bucket and reset metadata must also disappear')
+      await page.evaluate(subscriptions=>window.setFixtureSubscriptions(subscriptions),subscriptions);await pause(80)
+      assert.equal(await localIcon.locator('.arc').count(),0,'A late previous-account observation cannot restore progress')
+      await page.keyboard.press('Escape');await detail.waitFor({state:'detached'})
+    }
     checks.push({reduced,multipleTools:5,accountShared:true,importedQuotaNotAllocated:true,unknownAndStale:true,periodIndependent:true,missingCostNotZero:true,scrollable:true,independentPanel:true})
     await context.close()
   }

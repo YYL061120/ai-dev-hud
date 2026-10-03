@@ -1,5 +1,33 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+## 追加推进：真实 Codex stdio 额度接通与缺失费用修复（2026-10-03 UTC）
+
+Implemented:
+按用户追加授权继续官方连接诊断。现有 daemon control socket 仍不可连接（exit1，dead network/os10050），但官方短时 `app-server --listen stdio://` 实测成功：initialize→initialized→account/rateLimits/read，返回2个真实窗口；整次349ms，结果至stdin EOF正常exit0约17ms。客户端不读/复制凭据、不发login或token-refresh、不创建thread/turn、不启持久daemon或网络监听、不增加持久授权。现有CLI自身使用既有登录；本轮只对该进程临时关闭analytics，不改配置文件。新增有界stdio fallback（查询5秒/退出1秒），现有daemon优先；每分钟缓存/合并并发，不逐帧或按四周期重复启动。正常stdio等待EOF退出，仅超时终止自己创建的子进程；server要求外部token刷新时直接返回未知，不供应凭据。
+
+修复旧本地用量页的汇总卡和model/device/project金额表：领域 UsageTotals 附加 estimatedCost|null/missingEstimates，保留旧cost数字及传输/解析语义；无估算显示未知，真实pricing/log零值仍可显示0，混合缺失提示部分估算。hover分组保留tool/provider/model三重身份及所有token类别，补跨工具同模型/跨provider/部分费用测试。正式API实测 groupTokensEqualDevice=true、groupModelsComplete=true。
+
+Not completed:
+Claude尚未配置capture：只提供用户可显式启用的CLI适配器和组合原statusline的可审查方案。需要把现有脚本收到的同一JSON分支送进 capture-claude-limits，之后继续原脚本输出；不会直接以捕获命令替换原statusline。设置变更未授权，未改Claude settings/statusline、安全/隐私设置或请求模型响应。需要实际启用配置时由用户明确选择，不能冒称已接通。真实物理pointer/背景点击投递仍未测。
+
+两张参考图继续阻塞：先现场核对原目标为空，再使用当前官方helper对明确本机 `.tmp/reference-images-followup` 重试一次；仍为 os.setxattr AttributeError，两个最终目标exists=false，未绕过helper/权限、未查看图。新版先前可用合成截图Library ID仍为libfile_bd9eb0826b2c8191bac4a5d77a5cc016；本轮不上传实际账号额度或私人用量截图。
+
+Files changed:
+CLI local-control/subscriptions.ts与subscription-proxy.test.ts；core usage-metadata.ts、usage-metadata/usage-rings测试；web本地用量页；verify-ring-layout.cjs费用断言；SUBSCRIPTION_RINGS_PLAN、PROJECT_STATE、HANDOFF、ARCHITECTURE。
+
+Tests:
+最终build exit0；完整test exit0，1151passed/1既有POSIX skip/0failed，132files（core133/CLI869/web52/widget59/site38）。4条新增测试覆盖stdio EOF正常退出、拒绝token-refresh、费用unknown/真实0/部分缺失以及跨tool/provider同名model和全部token类别。生产额度2组normal/reduced通过；16组页面/多设备布局通过，汇总卡及所有model/device/project金额单元均保留未知，0pageerror。大历史/去重完整测试仍通过，Electron staged与Node SQLite绑定验证通过。此前悬停与真实150%/100%原生检查证据仍适用：本次未改其窗口/动效/交互实现。
+
+证据在C:\AI-Tools\ai-dev-hud-evidence\subscription-rings：codex-stdio-diagnostic.json（真实白名单窗口，不入Git）、codex-daemon-probe.json、codex-stdio-initial-diagnostic.json（初次诊断被stderr字节阈值提前中断；未保存raw stderr，改为排空丢弃后成功）、library-reference-retry.json、resident-followup-api.json；followup子目录包含生产JSON/PNG及最终build/test/layout/quota日志。无原始日志、提示、回复、凭据或私有DB提交/上传。
+
+正式恢复：HUD72944、Dashboard5872/3847，auth/status200、usage200、真实设备1；CodexWindows2、codexStates=[available,available]、ClaudeConnected=false。主屏偏好1220717916和设置SHA256 0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2不变。本次为0cc3de8之后的独立修复提交，最终SHA/远端由git核对，不改写历史。
+
+Three highest-priority manual tests:
+1. 在真实账号上核对Codex各bucket/实际window/reset、到期回未知及账号切换，确认短时stdio退出且无持久daemon。
+2. 用户明确启用Claude组合方案后核对原statusline输出保持、首个响应后的5h/7d与独立缺失；拒绝新认证/凭据处理。
+3. 物理两屏pointer/click-through与实际数据金额unknown/真实0/部分缺失、跨provider模型，以及历史传输和项目功能。
+
+
 ## 新阶段：工具套餐同心环与独立更多详情（2026-10-03 UTC）
 
 起点实测为 `15ee57f`，分支 `feat/local-control-center`，初始工作区干净；ARCHITECTURE/HANDOFF 位于 docs，仓库现场无 .agents 目录。实施方案见 `docs/SUBSCRIPTION_RINGS_PLAN.md`；以下替代旧设备份额弧的 UI 说明，metadata/API 的原采集份额字段仍保留兼容。
@@ -94,3 +122,12 @@ Three highest-priority manual tests:
 3. reduced-motion、键盘Tab/Escape、四周期/真实设备来源；中英网页窄屏、Dashboard以及大历史导入/导出保持可用。
 
 复跑：PATH加入C:\AI-Tools\.ai-dev-hud-tools\node_modules\.bin；使用pnpm.cmd。脚本指定AI_DEV_HUD_PLAYWRIGHT_PATH=C:\AI-Tools\.ai-dev-hud-tools\node_modules\playwright，以及AI_DEV_HUD_HOVER_EVIDENCE_DIR/AI_DEV_HUD_LAYOUT_EVIDENCE_DIR。node scripts/verify-hud-hover.cjs；node scripts/verify-hud-native-bounds.cjs；node scripts/verify-ring-layout.cjs。前两脚本只合成数据，后者隔离CLI。Computer Use恢复后才继续真实桌面验收，之后不开展新里程碑。
+## 最新交接：审查修复后的保守额度边界（2026-10-03 UTC）
+
+下方 stdio 查询及旧 available 记录为历史阶段。当前正式 readSubscriptions 清空未绑定账号登录代际的窗口；UI 同时检查 observation.generation 与 snapshot.subscriptionGenerations，任何缺失、切号、登出、旧响应均未知，并隐藏旧 bucket/reset。现有官方窗口数据没有足够的账号登录代际证明，未使用邮箱、设备 ID 或会话 ID 冒充。真实额度接入未完成，禁止将诊断查询成功解释为正式可显示。
+
+已修复跨进程 Claude 写入顺序（mkdir 有界锁、入口时间、临界区比较和 rename，含新空快照）及非法 Codex bucket 碰撞（拒绝观察）。scripts/verify-subscription-review.cjs 接受完整 Git SHA，从该提交源码生成隔离模块并运行合成账号隔离、非法桶及真实双进程捕获回归。不得用工作区源码冒充固定提交结果。
+
+全量最终 build 成功，tests 1155 passed / 1 既有 skip / 0 failed，132 files；Node/Electron SQLite 绑定构建检查通过。费用缺失不再显示零，跨 tool/provider 同名模型及五类 token 总量守恒有测试。证据目录 C:\AI-Tools\ai-dev-hud-evidence\subscription-rings；最终 UI/固定提交/正式进程信息见后续验证记录。
+
+参考 Library 图 libfile_d68642b587a88191b0a5b21cfd0b7cfe、libfile_ba021f4620788191a5494bd47e8d79eb：官方 materialization helper 一次指定本机目录重试仍 os.setxattr 失败，目标不存在，未查看。可用合成 UI 截图 Library ID：libfile_bd9eb0826b2c8191bac4a5d77a5cc016。主屏偏好保持；物理鼠标/真实点击投递仍需手测。完成本轮后停止，等待明确下一阶段授权。

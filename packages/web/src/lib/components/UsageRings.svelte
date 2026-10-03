@@ -24,8 +24,11 @@
   const tools = (ring: UsageRing) => ringToolUsage(ring, ring.key === snapshot.currentDeviceKey ? ['claude-code', 'codex'] : [])
   const size = (ring: UsageRing) => Math.max(64, 34 + tools(ring).length * 8)
   const toolColor = (tool: string) => tool === 'claude-code' ? '#e89968' : tool === 'codex' ? '#f3f3f5' : '#9ab9d0'
-  const quota = (ring: UsageRing, tool: string) => ring.key === snapshot.currentDeviceKey && ring.source !== 'imported' ? snapshot.subscriptions?.find(item => item.tool === tool) : undefined
-  const quotaState = (ring: UsageRing, tool: string) => subscriptionWindowState(quota(ring, tool), subscriptionRingWindow(quota(ring, tool)), now)
+  const quota = (ring: UsageRing, tool: string) => {
+    const candidate = ring.key === snapshot.currentDeviceKey && ring.source !== 'imported' ? snapshot.subscriptions?.find(item => item.tool === tool) : undefined
+    return candidate?.generation && candidate.generation === snapshot.subscriptionGenerations?.[tool] ? candidate : undefined
+  }
+  const quotaState = (ring: UsageRing, tool: string) => subscriptionWindowState(quota(ring, tool), subscriptionRingWindow(quota(ring, tool)), now, snapshot.subscriptionGenerations?.[tool])
   let frame = 0, closeTimer: ReturnType<typeof setTimeout> | undefined
   let inputMode: 'pointer' | 'keyboard' = 'pointer'
   let positionedKey: string | null = null
@@ -137,7 +140,7 @@
           {#each tools(ring) as tool, index (tool.tool)}
             {@const subscription = quota(ring, tool.tool)}
             {@const window = subscriptionRingWindow(subscription)}
-            {@const status = subscriptionWindowState(subscription, window, now)}
+            {@const status = subscriptionWindowState(subscription, window, now, snapshot.subscriptionGenerations?.[tool.tool])}
             <circle class="track" class:unknown={status !== 'available'} cx={size(ring) / 2} cy={size(ring) / 2} r={16 + index * 4} style={`stroke:${toolColor(tool.tool)}`} data-tool={tool.tool} data-quota-state={status}/>
             {#if status === 'available'}<circle class="arc" cx={size(ring) / 2} cy={size(ring) / 2} r={16 + index * 4} pathLength="100" stroke-dasharray="100" stroke-dashoffset={100 - window.usedPercent} style={`stroke:${toolColor(tool.tool)};transform-origin:${size(ring) / 2}px ${size(ring) / 2}px`} />{/if}
           {/each}

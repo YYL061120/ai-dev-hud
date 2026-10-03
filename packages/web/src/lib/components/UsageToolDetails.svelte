@@ -16,13 +16,14 @@
 </script>
 <div class="tools" data-testid="tool-details">
   {#each groups as group (group.tool)}
-    {@const subscription = local ? snapshot.subscriptions?.find(item => item.tool === group.tool) : undefined}
+    {@const candidate = local ? snapshot.subscriptions?.find(item => item.tool === group.tool) : undefined}
+    {@const subscription = candidate?.generation && candidate.generation === snapshot.subscriptionGenerations?.[group.tool] ? candidate : undefined}
     <section class="tool" style={`--tool-color:${group.tool === 'claude-code' ? '#e89968' : group.tool === 'codex' ? '#f3f3f5' : '#9ab9d0'}`} data-tool={group.tool}>
       <header><h4>{toolName(group.tool)}</h4><span title={words('基于已采集用量的金额估算，非订阅账单', 'Estimated from collected usage; not a subscription bill')}>{money(group.cost, group.missingEstimates)}</span></header>
       {#if subscription?.windows.length}
         <p class="scope">{words('账号共享', 'Shared account')}</p>
         {#each subscription.windows as window}
-          {@const status = subscriptionWindowState(subscription, window, now)}
+          {@const status = subscriptionWindowState(subscription, window, now, snapshot.subscriptionGenerations?.[group.tool])}
           <div class="quota" data-quota-state={status}>
             <span>{window.bucketName ?? window.bucketId} · {duration(window.durationMinutes)}</span><b>{status === 'available' ? `${window.usedPercent}% ${words('已用', 'used')}` : status === 'stale' ? words('已过期 · 未知', 'Stale · unknown') : words('未知', 'Unknown')}</b>
             {#if window.resetsAt !== null}<small>{words('重置 ', 'Resets ')}{new Date(window.resetsAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small>{/if}

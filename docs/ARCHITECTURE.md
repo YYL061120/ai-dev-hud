@@ -1,5 +1,11 @@
 # AI Dev HUD 架构与仓库侦察
 
+## Codex额度连接补充（追加授权，2026-10-03）
+
+CLI额度adapter在现有daemon不可用时采用官方短时stdio子进程，5s查询/1s退出上限、EOF正常关闭与60s缓存；仅initialize/initialized/rateLimits/read，不处理外部token-refresh、不创建thread/turn、不启持久daemon、不直接碰凭据。现场已返回两个真实官方窗口。此前“仅连接现有daemon”的限制已按用户追加请求扩展，Claude仍须用户显式选择组合原statusline。
+
+UsageTotals新增可选estimatedCost|null与missingEstimates用于旧本地页汇总/表格，旧cost保留兼容且不改变export/parser/schema。模型三重分组及导入去重保持。最新实测/失败证据见PROJECT_STATE首节。
+
 ## 当前工具套餐同心环（2026-10-03 新阶段）
 
 本节替代旧“设备 token 份额弧”的 UI 呈现；旧 UsageRingsSnapshot.metric/total/share 继续作为兼容的采集统计字段，不用于画套餐进度。设备/模型 tokens 与估算费用继续由 UsageMetadataStore 和 buildUsageRings 产生，未重写 parser/SQL/导入去重。
@@ -106,3 +112,8 @@ renderer 经现有 typed IPC 接收 reveal，translateX 在原透明 HWND 内裁
 导入按 2 MiB 最大行解析，不读取全部 JSONL；每块使用旧原子导入和写入队列。TEMP 本机身份索引由 database 对象共享，依据 total_changes/data_version 和设备身份失效；确认导入写入后更新缓存版本，因此不会每个块重新扫描完整 provider 历史。完整文件必须有计数匹配且位于末尾的 footer。取消保留已确认块，网络丢失响应标记未知最后一块，重试去重；没有全文件事务/自动回滚。浏览器原生下载负责磁盘输出，界面展示服务端传输计数和状态。
 
 官方 Codex 元数据状态只通过官方 executable 的 daemon version 命令检查现有 transport；不启动任何服务。当前无法连接，公开 thread/list/useStateDbOnly 可行性记录在 PROJECT_STATE，尚不发起 thread/read/list，也不扫描原始会话。同步 adapter 仍只是显式配置契约；当前没有外部 adapter 执行。
+### 审查后的账号额度边界（2026-10-03）
+
+窗口观察不等同当前账号授权。ToolSubscription.generation 仅允许可靠认证集成提供 opaque 登录代际；UsageRingsSnapshot.subscriptionGenerations 是独立确认的当前代际。消费端缺失/不一致时未知，连旧窗口 metadata 也隐藏。目前两种被动来源不能确认代际，readSubscriptions 丢弃窗口，parser/诊断仍可独立验证官方数据格式。不读取持久凭据、不保存原始账号身份，严禁将 deviceKey/session_id/email 当账号代际。
+
+Claude capture 用目录独占锁覆盖读取旧 observedAt、比较、临时写入、rename；入口时间防止延迟输入回灌，较新空观察也有效。锁有界失败，不擅自回收未知持有者。非法桶 ID 拒绝整份观察，保持合法多桶语义。

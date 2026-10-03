@@ -5,10 +5,11 @@
   import type { UsageOverview } from '../../../../core/src/usage-metadata.js'
   import type { UsageExportProgress } from '../../../../core/src/usage-transfer.js'
   import { importUsageFile, type FileImportProgress } from '$lib/usage-file'
+  import { beginUsageExport } from '$lib/usage-export-lifecycle'
   let data: UsageOverview | null = null
   let busy = false, error = '', period = 'thirty', device = '', project = ''
   let imported: FileImportProgress | null = null, exported: UsageExportProgress | null = null
-  let cancelRequested = false, mounted = true
+  let cancelRequested = false, mounted = true, exportCreating = false
   let devices: string[] = [], projects: string[] = []
   const periods = ['today', 'seven', 'thirty', 'lifetime'] as const
   const number = (value: number, language: string) => value.toLocaleString(getLocale(language))
@@ -20,9 +21,15 @@
     devices = all.devices.map(r => r.key); projects = all.projects.map(r => r.key)
   }
   async function exportMetadata() {
-    exported = await usageApi.startExport()
-    const id = exported.id, link = document.createElement('a')
-    link.href = `/api/local/usage/export-jobs/${id}/file`; link.download = 'ai-dev-hud-usage-metadata-v1.jsonl'; link.click()
+    exportCreating = true
+    let id: string | undefined
+    try {
+      id = await beginUsageExport(usageApi, () => !mounted || cancelRequested, value => exported = value, jobId => {
+        const link = document.createElement('a')
+        link.href = `/api/local/usage/export-jobs/${jobId}/file`; link.download = 'ai-dev-hud-usage-metadata-v1.jsonl'; link.click()
+      })
+    } finally { exportCreating = false }
+    if (!id) return
     try {
       while (mounted && ['pending', 'running'].includes(exported.state)) {
         await new Promise(resolve => setTimeout(resolve, 300))
@@ -34,6 +41,11 @@
       exported = { ...exported, state: 'failed' }
       throw e
     }
+  }
+  async function startExport() {
+    if (busy || !mounted) return
+    cancelRequested = false; imported = null; exported = null
+    await operation(exportMetadata)
   }
   async function importFile(event: Event) {
     const input = event.target as HTMLInputElement, file = input.files?.[0]
@@ -60,12 +72,12 @@
 <div class="page-header"><h1>{$t('control.usage')}</h1><p>{$t('control.privacy')}</p></div>
 {#if error}<p role="alert" class="error">{error}</p>{/if}
 <section class="card actions">
-  <button data-testid="usage-export" disabled={busy} on:click={() => { cancelRequested = false; imported = null; operation(exportMetadata) }}>{$t('control.export')}</button>
+  <button data-testid="usage-export" disabled={busy} on:click={startExport}>{$t('control.export')}</button>
   <label class="upload">{$t('control.import')}<input data-testid="usage-import" type="file" accept=".json,.jsonl,application/json,application/x-ndjson" disabled={busy} on:change={importFile} /></label>
   <button disabled={busy} on:click={() => operation(refresh)}>{$t('control.refresh')}</button>
   <p class="hint">{$t('control.transferHint')}</p>
 </section>
-{#if busy && (imported?.state === 'running' || exported && ['pending','running'].includes(exported.state))}<button data-testid="transfer-cancel" disabled={cancelRequested} on:click={cancelTransfer}>{$t('control.cancelTransfer')}</button>{/if}
+{#if busy && (exportCreating || imported?.state === 'running' || exported && ['pending','running'].includes(exported.state))}<button data-testid="transfer-cancel" disabled={cancelRequested} on:click={cancelTransfer}>{$t('control.cancelTransfer')}</button>{/if}
 {#if exported}<p data-testid="export-progress" role="status">{$t(`control.transfer-${exported.state}`)} · {number(exported.records, $lang)} {$t('control.records')} · {number(exported.chunks, $lang)} {$t('control.chunks')}</p>{/if}
 {#if imported}<pre data-testid="import-result" role="status">{$t(`control.transfer-${imported.state}`)} · {number(imported.records, $lang)} {$t('control.confirmedRecords')} · {number(imported.chunks, $lang)} {$t('control.chunks')} · {$t('control.fileRead')} {Math.round(100 * imported.bytes / Math.max(1, imported.totalBytes))}%
 {JSON.stringify(imported.result, null, 2)}</pre>{#if imported.state === 'failed' || imported.state === 'cancelled'}<p class="hint">{$t('control.partialImport')}{#if imported.uncertain} {$t('control.uncertainImport')}{/if}</p>{/if}{/if}

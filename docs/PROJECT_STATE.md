@@ -1,5 +1,25 @@
 # 项目状态
 
+## 最新修正：延迟导出创建响应的生命周期竞态（2026-10-03 UTC）
+
+父任务独立审查发现 P2：导出任务尚未返回 ID 时离开页面，销毁回调无法取消；旧创建响应随后仍会触发下载。本次仅修此竞态及相邻取消/重复点击状态，无新增产品功能。
+
+Implemented: 取得任务 ID 后、同步下载回调之前再次检查 mounted/cancelRequested；页面已销毁或用户已取消时，只调用该任务的 cancel 并返回，不下载、不轮询。创建期间也显示取消按钮；导出入口先检查 busy/mounted，再清空旧状态，避免重复点击重置取消标记或创建第二个任务。小型 typed lifecycle helper 与实际页面共用同一逻辑。
+
+Tests: pnpm.cmd build exit0；pnpm.cmd test 1,125 passed、1原有Windows POSIX权限skip、0failed，127files（core123/CLI861/web49/widget54/site38）。新增5个延迟生命周期测试覆盖离页、创建期间取消、已停止、正常下载和取消失败不下载。Windows Edge 真实 API 延迟创建响应：SPA离页 download0/cancel1；创建期间取消 download0/cancel1；重复普通/程序化点击均仅创建一个任务、正常下载一次，无 pageerror。证据 export-lifecycle-gui.json、export-lifecycle-page-left.png、export-lifecycle-creation-cancelled.png、export-lifecycle-full-build.log、export-lifecycle-full-tests.log。均用仓库外独立配置及空合成数据库。
+
+运行：Dashboard仍为PID59516，127.0.0.1:3847；只读核对已提供最新构建的SPA静态页，无须重启。HUD仍为PID42052，源码/设置未改；未导出真实metadata、启动Codex或配置同步。
+
+Not completed: 真正外部同步和官方最近会话列表状态同前，仍等待同步决策；无本修复阻塞。取消接口本身失败时显示错误且不会触发下载，既有服务端任务超时仍有效。
+
+Files changed: web routes/local-usage/+page.svelte、lib/usage-export-lifecycle.ts、tests/usage-export-lifecycle.test.ts 与本状态文档。
+
+Three highest-priority manual tests:
+1. 导出创建响应较慢时立即切换到其他Dashboard页；确认没有随后出现的下载。
+2. 创建任务期间点击取消，确认返回后显示已取消并能重新导出。
+3. 快速重复点击导出，确认只有一个下载；正常导出和既有HUD行为仍正确。
+
+
 ## 最新状态：本地大历史补齐（2026-10-03 UTC）
 
 本批功能与合成验证已完成，停止新增功能，等待用户选择同步目录或云方案。未配置外部同步，未合并设备身份，未修改 HUD、provider parser 或 Dashboard 的视觉布局。

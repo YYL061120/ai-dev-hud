@@ -3,6 +3,7 @@ import Database from 'better-sqlite3'
 import { aggregateUsage, safeUsageIdentifier, TRANSFER_RECORD_LIMIT, USAGE_METADATA_FIELDS, USAGE_CHUNK_RECORDS, validateUsageTransfer, type UsageMetadataRecord, type UsageMetadataTransfer, type MetadataImportResult } from '@aiusage/core'
 import { LOCAL_RECORDS_WHERE } from '../db/records.js'
 import { LocalControlError } from './projects.js'
+import { buildUsageRings, type DeviceUsageOrigin, type UsagePeriod } from '@aiusage/core'
 const hash = (namespace: string, value: string) => createHash('sha256').update(`${namespace}\0${value}`).digest('hex')
 export const deviceKeyFor = (id: string) => hash('device', id)
 const projection = 'id, ts, updated_at, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source, session_id, cwd, device_instance_id, platform'
@@ -31,17 +32,26 @@ export class UsageMetadataStore {
     const rows = this.db.prepare(`SELECT id, ts, updated_at, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source, session_id, cwd, device_instance_id, platform FROM records WHERE ${LOCAL_RECORDS_WHERE}`).all()
     return rows.map(row => localRow(row, this.currentId))
   }
-  private records(): UsageMetadataRecord[] {
+  private records(origins?: Map<string, DeviceUsageOrigin>): UsageMetadataRecord[] {
     const local = this.localRecords(); const keyed = new Map(local.map(r => [`${r.deviceKey}:${r.recordKey}`, r]))
+    for (const row of local) origins?.set(row.deviceKey, { source: 'local', importedAt: null })
+    const receipts = new Map<string, number>()
+    if (origins && this.db.prepare("SELECT name FROM sqlite_master WHERE name='hud_usage_import_receipts'").get()) for (const row of this.db.prepare('SELECT device_key, received_at FROM hud_usage_import_receipts').all() as Array<{ device_key: string; received_at: number }>) receipts.set(row.device_key, row.received_at)
     if (this.exists()) for (const row of this.db.prepare('SELECT payload FROM hud_usage_metadata').all() as Array<{ payload: string }>) {
       const record = JSON.parse(row.payload) as UsageMetadataRecord
       const key = `${record.deviceKey}:${record.recordKey}`
-      if (!keyed.has(key)) keyed.set(key, record)
+      if (!keyed.has(key)) {
+        keyed.set(key, record)
+        if (origins) { const previous = origins.get(record.deviceKey); origins.set(record.deviceKey, { source: previous?.source === 'local' || previous?.source === 'mixed' ? 'mixed' : 'imported', importedAt: receipts.get(record.deviceKey) ?? null }) }
+      }
     }
     return [...keyed.values()]
   }
-  overview(period = 'thirty', device?: string, project?: string, now?: Date) {
-    return aggregateUsage(this.records(), deviceKeyFor(this.currentId), period, device, project, now)
+  overview(period = 'thirty', device?: string, project?: string, now?: Date, includeRingPeriods = false) {
+    const origins = new Map<string, DeviceUsageOrigin>(), records = this.records(origins), key = deviceKeyFor(this.currentId)
+    const clock = now ?? new Date(), build = (p: UsagePeriod) => buildUsageRings(records, key, p, origins, device, project, clock)
+    const ringPeriods = includeRingPeriods ? Object.fromEntries((['today', 'seven', 'thirty', 'lifetime'] as UsagePeriod[]).map(p => [p, build(p)])) as Record<UsagePeriod, ReturnType<typeof build>> : undefined
+    return { ...aggregateUsage(records, key, period, device, project, clock), rings: ringPeriods?.[period as UsagePeriod] ?? build(period as UsagePeriod), ...(ringPeriods ? { ringPeriods } : {}) }
   }
   export(): UsageMetadataTransfer {
     const records: UsageMetadataRecord[] = []; let bytes = 128
@@ -120,6 +130,8 @@ export class UsageMetadataStore {
     const local = this.db.prepare('SELECT 1 FROM hud_local_identity WHERE device_key=? AND record_key=?')
     const result = this.db.transaction(() => {
       this.db.exec('CREATE TABLE IF NOT EXISTS hud_usage_metadata (device_key TEXT NOT NULL, record_key TEXT NOT NULL, updated_at INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(device_key, record_key))')
+      this.db.exec('CREATE TABLE IF NOT EXISTS hud_usage_import_receipts (device_key TEXT PRIMARY KEY, received_at INTEGER NOT NULL)')
+      const received = new Set<string>()
       const get = this.db.prepare('SELECT updated_at, payload FROM hud_usage_metadata WHERE device_key=? AND record_key=?')
       const put = this.db.prepare('INSERT INTO hud_usage_metadata(device_key, record_key, updated_at, payload) VALUES (?,?,?,?) ON CONFLICT(device_key,record_key) DO UPDATE SET updated_at=excluded.updated_at, payload=excluded.payload')
       const result: MetadataImportResult = { added: 0, updated: 0, duplicates: 0, conflicts: 0 }
@@ -130,10 +142,14 @@ export class UsageMetadataStore {
         const previous = get.get(record.deviceKey, record.recordKey) as { updated_at: number; payload: string } | undefined
         const payload = JSON.stringify(record)
         if (previous && previous.updated_at === record.updatedAt && previous.payload !== payload) { result.conflicts++; continue }
-        if (previous && previous.updated_at >= record.updatedAt) { result.duplicates++; continue }
+        if (previous && previous.updated_at >= record.updatedAt) { result.duplicates++; received.add(record.deviceKey); continue }
         put.run(record.deviceKey, record.recordKey, record.updatedAt, payload)
+        received.add(record.deviceKey)
         if (previous) result.updated++; else result.added++
       }
+      const receipt = this.db.prepare('INSERT INTO hud_usage_import_receipts VALUES (?,?) ON CONFLICT(device_key) DO UPDATE SET received_at=excluded.received_at')
+      const receivedAt = Date.now()
+      for (const key of received) receipt.run(key, receivedAt)
       return result
     })()
     identityCaches.set(this.db, { currentId: this.currentId, changes: changes(this.db), version: version(this.db) })

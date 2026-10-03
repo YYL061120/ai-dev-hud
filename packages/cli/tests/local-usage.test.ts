@@ -11,6 +11,23 @@ const fixture = (): StatsRecord => ({ id: 'PRIVATE_SOURCE_ID', ts: Date.now(), i
 beforeEach(() => { db = createDatabase(':memory:'); insertRecord(db, fixture()) })
 afterEach(() => { db.close(); vi.unstubAllEnvs() })
 describe('local metadata storage adapter', () => {
+  it('exposes consistent device rings, real import receipts and unknown historic receipt times without changing exports', () => {
+    const store = new UsageMetadataStore(db, 'local-device-instance'), foreign = store.export()
+    foreign.records[0].deviceKey = 'e'.repeat(64); foreign.records[0].recordKey = 'f'.repeat(64)
+    store.import(foreign)
+    const overview = store.overview('today')
+    expect(overview.rings!.total.tokens).toBe(overview.selected.tokens)
+    expect(overview.rings!.devices.reduce((n, r) => n + r.tokens, 0)).toBe(overview.selected.tokens)
+    const imported = overview.rings!.devices.find(r => r.key === 'e'.repeat(64))!
+    expect(imported.source).toBe('imported'); expect(imported.importedAt).toBeGreaterThan(0); expect(imported.share).toBe(.5)
+    const all = store.overview('today', undefined, undefined, undefined, true).ringPeriods!
+    expect(Object.keys(all)).toEqual(['today', 'seven', 'thirty', 'lifetime'])
+    expect(new Set(Object.values(all).map(r => r.generatedAt)).size).toBe(1)
+    expect(store.import(foreign).duplicates).toBe(1); expect(store.overview('today').selected.tokens).toBe(240)
+    db.exec('DROP TABLE hud_usage_import_receipts')
+    expect(store.overview('today').rings!.devices.find(r => r.key === imported.key)!.importedAt).toBeNull()
+    expect(store.export().records[1]).not.toHaveProperty('importedAt')
+  })
   it('exports only allowlisted metadata without paths, hostname or raw identifiers', () => {
     const store = new UsageMetadataStore(db, 'local-device-instance'); const transfer = store.export(); const text = JSON.stringify(transfer)
     expect(text).not.toMatch(/PRIVATE_|sourceFile|source_file|cwd|hostname|lineOffset/)

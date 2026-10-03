@@ -1,4 +1,5 @@
 import { TOOLS, type Tool, type StatsRecord } from './types.js'
+import type { UsagePeriod, UsageRingsSnapshot } from './usage-rings.js'
 export interface UsageMetadataRecord {
   deviceKey: string; recordKey: string; projectKey: string | null; sessionKey: string | null
   ts: number; updatedAt: number; tool: Tool; model: string; provider: string; platform: 'win32' | 'darwin' | 'linux' | 'unknown'
@@ -42,6 +43,8 @@ export const safeUsageIdentifier = (value: unknown, kind: 'model' | 'provider' =
 export interface UsageTotals { tokens: number; cost: number; records: number; sessions: number }
 export interface UsageBreakdown extends UsageTotals { key: string }
 export interface UsageOverview {
+  rings?: UsageRingsSnapshot
+  ringPeriods?: Record<UsagePeriod, UsageRingsSnapshot>
   currentDeviceKey: string; periods: { today: UsageTotals; seven: UsageTotals; thirty: UsageTotals; lifetime: UsageTotals }
   selected: UsageTotals; models: UsageBreakdown[]; devices: UsageBreakdown[]; projects: UsageBreakdown[]
   heatmap: Array<{ day: string; tokens: number; records: number; cost: number }>

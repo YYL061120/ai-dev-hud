@@ -41,7 +41,9 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
           if (!['today', 'seven', 'thirty', 'lifetime'].includes(period)) throw new LocalControlError('Invalid usage period')
           const device = url.searchParams.get('device') || undefined, project = url.searchParams.get('project') || undefined
           if ((device && !/^[a-f0-9]{64}$/.test(device)) || (project && project !== 'unknown' && !/^[a-f0-9]{64}$/.test(project))) throw new LocalControlError('Invalid metadata filter')
-          const overview = store.overview(period, device, project)
+          const ringPeriods = url.searchParams.get('ringPeriods')
+          if (ringPeriods !== null && ringPeriods !== 'all') throw new LocalControlError('Invalid ring periods')
+          const overview = store.overview(period, device, project, undefined, ringPeriods === 'all')
           overview.projectLabels = Object.fromEntries((await registry.list()).map(item => [store.projectKeyFor(item.path), item.name]))
           reply(res, overview)
         } else if (route === 'usage/export' && req.method === 'GET') {

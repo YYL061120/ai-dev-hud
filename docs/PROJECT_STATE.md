@@ -1,5 +1,22 @@
 # 项目状态
 
+## 当前授权：设备 Token 用量圈（2026-10-03 UTC，实机验证进行中）
+
+用户已明确追加参考交互改造，计划见 TOKEN_RINGS_PLAN.md。core / CLI 已提供同一去重来源的四个自然日周期 snapshot、设备占比、真实 tool/provider/model 明细及缺失估值；可一次读取四周期并使用同一时钟。导入接收时间只留本地 receipt 表，旧历史无可信时间时为 null，不写入 metadata 导出。原 parser、synced_records、云同步行为未改变。
+
+Tests: 完整 pnpm.cmd build 与 pnpm.cmd test 已通过（1,132 passed、1 原有 Windows POSIX 权限 skip、0 failed），新增领域和 API 回归通过。共享 UI 和 HUD 已接入，但 Windows 视觉、触屏、混合 DPI、性能及真实实例更新尚在验证；暂不宣称本轮完成。Edge 合成交互发现非聚焦悬停浮层的 Escape 问题，已修正并复测中。实际设备只读侦察仅有一台本机，不能宣称另外两台已接入。
+
+Implemented: typed rings 数据层 / 同周期总量分母 / 接收时间来源；参考 UI 初版。
+
+Not completed: 本轮 Windows 实机验证与最终 UI 提交；跨设备真实同步和最近会话 adapter 仍未实现。
+
+Files changed: core usage-rings / usage-metadata / index；CLI local-control/usage / API local-control 与测试；TOKEN_RINGS_PLAN、AGENTS 和本状态。
+
+Three highest-priority manual tests:
+1. 同一周期各设备 token 相加等于总圈；未接入设备没有伪造零值。
+2. 悬停 / 点击 / 键盘 Escape 的明细切换与原右侧唤起保持正常。
+3. 手动重复导入不增加用量，旧历史没有虚构连接时间。
+
 ## 最新修正：延迟导出创建响应的生命周期竞态（2026-10-03 UTC）
 
 父任务独立审查发现 P2：导出任务尚未返回 ID 时离开页面，销毁回调无法取消；旧创建响应随后仍会触发下载。本次仅修此竞态及相邻取消/重复点击状态，无新增产品功能。

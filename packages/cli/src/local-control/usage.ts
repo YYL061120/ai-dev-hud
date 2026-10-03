@@ -1,10 +1,14 @@
-import { createHash } from 'node:crypto'
-import type Database from 'better-sqlite3'
-import { aggregateUsage, safeUsageIdentifier, TRANSFER_RECORD_LIMIT, USAGE_METADATA_FIELDS, validateUsageTransfer, type UsageMetadataRecord, type UsageMetadataTransfer, type MetadataImportResult } from '@aiusage/core'
+import { createHash, randomUUID } from 'node:crypto'
+import Database from 'better-sqlite3'
+import { aggregateUsage, safeUsageIdentifier, TRANSFER_RECORD_LIMIT, USAGE_METADATA_FIELDS, USAGE_CHUNK_RECORDS, validateUsageTransfer, type UsageMetadataRecord, type UsageMetadataTransfer, type MetadataImportResult } from '@aiusage/core'
 import { LOCAL_RECORDS_WHERE } from '../db/records.js'
 import { LocalControlError } from './projects.js'
 const hash = (namespace: string, value: string) => createHash('sha256').update(`${namespace}\0${value}`).digest('hex')
 export const deviceKeyFor = (id: string) => hash('device', id)
+const projection = 'id, ts, updated_at, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source, session_id, cwd, device_instance_id, platform'
+const identityCaches = new WeakMap<Database.Database, { currentId: string; changes: number; version: number }>()
+const changes = (db: Database.Database) => (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n
+const version = (db: Database.Database) => db.pragma('data_version', { simple: true }) as number
 const projectPathKey = (value: string) => /^[a-z]:|\\/.test(value.toLowerCase()) ? value.replaceAll('\\', '/').toLowerCase().replace(/\/+$/, '') : value.replace(/\/+$/, '')
 function localRow(row: any, currentId: string): UsageMetadataRecord {
   const deviceId = !row.device_instance_id || row.device_instance_id === 'unknown' ? currentId : row.device_instance_id
@@ -40,18 +44,81 @@ export class UsageMetadataStore {
     return aggregateUsage(this.records(), deviceKeyFor(this.currentId), period, device, project, now)
   }
   export(): UsageMetadataTransfer {
-    const records = this.records()
-    if (records.length > TRANSFER_RECORD_LIMIT) throw new LocalControlError('Export exceeds 50,000 records; large-history chunked export is not yet available', 409)
+    const records: UsageMetadataRecord[] = []; let bytes = 128
+    for (const chunk of this.exportChunks()) {
+      records.push(...chunk.records); bytes += Buffer.byteLength(JSON.stringify(chunk.records))
+      if (records.length > TRANSFER_RECORD_LIMIT || bytes > 10 * 1024 * 1024) throw new LocalControlError('Legacy JSON limit exceeded; use the chunked export button', 409)
+    }
     const transfer: UsageMetadataTransfer = { format: 'ai-dev-hud-usage', version: 1, exportedAt: Date.now(), records }
     try { validateUsageTransfer(transfer) } catch { throw new LocalControlError('Some local records need normalized usage values before export', 409) }
-    if (Buffer.byteLength(JSON.stringify(transfer)) > 10 * 1024 * 1024) throw new LocalControlError('Export exceeds 10 MiB; chunked export is not yet available', 409)
+    if (Buffer.byteLength(JSON.stringify(transfer)) > 10 * 1024 * 1024) throw new LocalControlError('Legacy JSON limit exceeded; use the chunked export button', 409)
     return transfer
+  }
+  /** One WAL read snapshot; only bounded batches are held in JS. TEMP identity keys stay on disk. */
+  *exportChunks(): Generator<UsageMetadataTransfer> {
+    const owned = this.db.name !== ':memory:' && this.db.name !== ''
+    const snapshot = owned ? new Database(this.db.name, { readonly: true, fileMustExist: true }) : this.db
+    const keys = `hud_export_${randomUUID().replaceAll('-', '')}`
+    const exportedAt = Date.now()
+    try {
+      if (snapshot.pragma('temp_store', { simple: true }) !== 1) snapshot.pragma('temp_store = FILE')
+      if (owned) { snapshot.pragma('cache_size = -4096'); snapshot.exec('BEGIN'); snapshot.prepare('SELECT id FROM records LIMIT 1').get() }
+      snapshot.exec(`CREATE TEMP TABLE ${keys}(device_key TEXT, record_key TEXT, PRIMARY KEY(device_key,record_key)) WITHOUT ROWID`)
+      const put = snapshot.prepare(`INSERT OR IGNORE INTO ${keys} VALUES (?,?)`)
+      const local = snapshot.prepare(`SELECT rowid AS cursor, ${projection} FROM records WHERE ${LOCAL_RECORDS_WHERE} AND rowid>? ORDER BY rowid LIMIT ?`)
+      let cursor = 0
+      while (true) {
+        const rows = local.all(cursor, USAGE_CHUNK_RECORDS) as any[]
+        if (!rows.length) break
+        const records = rows.map(row => localRow(row, this.currentId))
+        for (const record of records) put.run(record.deviceKey, record.recordKey)
+        cursor = rows.at(-1)!.cursor
+        yield this.validChunk(records, exportedAt)
+      }
+      if (snapshot.prepare("SELECT name FROM sqlite_master WHERE name='hud_usage_metadata'").get()) {
+        const imported = snapshot.prepare(`SELECT m.rowid AS cursor, m.payload FROM hud_usage_metadata m WHERE m.rowid>? AND NOT EXISTS (SELECT 1 FROM ${keys} k WHERE k.device_key=m.device_key AND k.record_key=m.record_key) ORDER BY m.rowid LIMIT ?`)
+        cursor = 0
+        while (true) {
+          const rows = imported.all(cursor, USAGE_CHUNK_RECORDS) as Array<{ cursor: number; payload: string }>
+          if (!rows.length) break
+          cursor = rows.at(-1)!.cursor
+          yield this.validChunk(rows.map(row => JSON.parse(row.payload)), exportedAt)
+        }
+      }
+    } finally {
+      if (owned) { if (snapshot.inTransaction) snapshot.exec('ROLLBACK'); snapshot.close() }
+      else snapshot.exec(`DROP TABLE IF EXISTS ${keys}`)
+    }
+  }
+  private validChunk(records: UsageMetadataRecord[], exportedAt: number): UsageMetadataTransfer {
+    try { return validateUsageTransfer({ format: 'ai-dev-hud-usage', version: 1, exportedAt, records }) }
+    catch { throw new LocalControlError('Some local records need normalized usage values before export', 409) }
+  }
+  /** Cache invalidates on parser writes, external DB writes or device changes, not each imported chunk. */
+  private localIdentityIndex() {
+    const cached = identityCaches.get(this.db)
+    if (cached?.currentId === this.currentId && cached.changes === changes(this.db) && cached.version === version(this.db)) return
+    if (this.db.pragma('temp_store', { simple: true }) !== 1) this.db.pragma('temp_store = FILE')
+    this.db.exec('CREATE TEMP TABLE IF NOT EXISTS hud_local_identity(device_key TEXT, record_key TEXT, PRIMARY KEY(device_key,record_key)) WITHOUT ROWID; DELETE FROM hud_local_identity')
+    const select = this.db.prepare(`SELECT rowid AS cursor, id, device_instance_id FROM records WHERE ${LOCAL_RECORDS_WHERE} AND rowid>? ORDER BY rowid LIMIT 1000`)
+    const put = this.db.prepare('INSERT OR IGNORE INTO hud_local_identity VALUES (?,?)')
+    this.db.transaction(() => {
+      let cursor = 0
+      while (true) {
+        const rows = select.all(cursor) as Array<{ cursor: number; id: string; device_instance_id: string }>
+        if (!rows.length) break
+        for (const row of rows) { const device = deviceKeyFor(!row.device_instance_id || row.device_instance_id === 'unknown' ? this.currentId : row.device_instance_id); put.run(device, hash('record', `${device}\0${row.id}`)) }
+        cursor = rows.at(-1)!.cursor
+      }
+    })()
+    identityCaches.set(this.db, { currentId: this.currentId, changes: changes(this.db), version: version(this.db) })
   }
   import(value: unknown): MetadataImportResult {
     let transfer: UsageMetadataTransfer
     try { transfer = validateUsageTransfer(value) } catch { throw new LocalControlError('Invalid version 1 usage metadata or non-allowlisted fields') }
-    const local = new Set(this.localRecords().map(r => `${r.deviceKey}:${r.recordKey}`))
-    return this.db.transaction(() => {
+    this.localIdentityIndex()
+    const local = this.db.prepare('SELECT 1 FROM hud_local_identity WHERE device_key=? AND record_key=?')
+    const result = this.db.transaction(() => {
       this.db.exec('CREATE TABLE IF NOT EXISTS hud_usage_metadata (device_key TEXT NOT NULL, record_key TEXT NOT NULL, updated_at INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(device_key, record_key))')
       const get = this.db.prepare('SELECT updated_at, payload FROM hud_usage_metadata WHERE device_key=? AND record_key=?')
       const put = this.db.prepare('INSERT INTO hud_usage_metadata(device_key, record_key, updated_at, payload) VALUES (?,?,?,?) ON CONFLICT(device_key,record_key) DO UPDATE SET updated_at=excluded.updated_at, payload=excluded.payload')
@@ -59,7 +126,7 @@ export class UsageMetadataStore {
       for (const input of transfer.records) {
         // Canonical property order makes semantic equality independent of JSON key order.
         const record = Object.fromEntries(USAGE_METADATA_FIELDS.map(key => [key, input[key]])) as unknown as UsageMetadataRecord
-        if (local.has(`${record.deviceKey}:${record.recordKey}`)) { result.duplicates++; continue }
+        if (local.get(record.deviceKey, record.recordKey)) { result.duplicates++; continue }
         const previous = get.get(record.deviceKey, record.recordKey) as { updated_at: number; payload: string } | undefined
         const payload = JSON.stringify(record)
         if (previous && previous.updated_at === record.updatedAt && previous.payload !== payload) { result.conflicts++; continue }
@@ -69,5 +136,7 @@ export class UsageMetadataStore {
       }
       return result
     })()
+    identityCaches.set(this.db, { currentId: this.currentId, changes: changes(this.db), version: version(this.db) })
+    return result
   }
 }

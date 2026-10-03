@@ -52,7 +52,7 @@
   <h3>{$t('control.documents')}</h3>
   {#each selected.documents as doc}<div class="row"><span>{doc.path}</span><button disabled={busy || !doc.available} on:click={() => operation(async () => { if (selected) document = await projectApi.document(selected.id, doc.key) })}>{doc.available ? $t('control.read') : $t('control.unavailable')}</button></div>{/each}
   {#if document}<h3>{document.path}</h3><pre data-testid="project-document">{document.content}</pre>{/if}
-  <p class="hint">{$t('control.sessions')}</p>
+  <p class="hint" data-testid="session-metadata-status">{$t(`control.session-${selected.recentSession.reason}`)} {selected.recentSession.version ?? ''} · {$t('control.sessionSource')}</p>
   <label for="project-task">{$t('control.task')}</label><select id="project-task" bind:value={task} on:change={() => { prompt = '' }}>{#each tasks as value}<option value={value}>{$t(`control.${value}`)}</option>{/each}</select>
   {#if task === 'new-project'}<p>{$t('control.newHint')}</p><label for="project-goal">{$t('control.newGoal')}</label><input id="project-goal" bind:value={goal} maxlength="4000" />{/if}
   <div class="actions"><button data-testid="kickoff-preview" disabled={busy || !selected.available} on:click={() => operation(preview)}>{$t('control.preview')}</button>{#if prompt}<button data-testid="copy-kickoff" on:click={() => operation(async () => { await navigator.clipboard.writeText(prompt); notice = $t('control.copied') })}>{$t('control.copy')}</button>{/if}</div>

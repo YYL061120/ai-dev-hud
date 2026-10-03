@@ -5,6 +5,8 @@ import { AIUSAGE_DIR } from '../config.js'
 import { ProjectRegistry, discoverProjects, inspectProject, kickoff, LocalControlError, readProjectDocument } from '../local-control/projects.js'
 import { codexStatus, launchCodex } from '../local-control/launcher.js'
 import type { UsageMetadataStore } from '../local-control/usage.js'
+import { UsageExportJobs } from '../local-control/usage-export.js'
+import { codexMetadataStatus } from '../local-control/session-metadata.js'
 export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new LocalControlError('JSON content type required', 415)
   const chunks: Buffer[] = []; let bytes = 0
@@ -17,8 +19,10 @@ export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024
 }
 export const reply = (res: http.ServerResponse, body: unknown, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)) }
 export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json')), usage?: () => UsageMetadataStore, runWrite: <T>(task: () => T | Promise<T>) => Promise<T> = async task => task()) {
+  const exports = new UsageExportJobs()
   return async (req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> => {
     if (!url.pathname.startsWith('/api/local/')) return false
+    res.setHeader('Cache-Control', 'no-store')
     try {
       // Even a password-enabled remotely bound dashboard cannot operate this computer's project files/launcher.
       const remote = req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? ''
@@ -27,7 +31,12 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
       if (route.startsWith('usage')) {
         if (!usage) throw new LocalControlError('Usage service unavailable', 503)
         const store = usage()
-        if (route === 'usage' && req.method === 'GET') {
+        const exportRoute = /^usage\/export-jobs\/([a-f0-9-]{36})(?:\/(file|cancel))?$/.exec(route)
+        if (route === 'usage/export-jobs' && req.method === 'POST') { await boundedJson(req); reply(res, exports.start()) }
+        else if (exportRoute && !exportRoute[2] && req.method === 'GET') reply(res, exports.status(exportRoute[1]))
+        else if (exportRoute?.[2] === 'file' && req.method === 'GET') await exports.download(exportRoute[1], store, res)
+        else if (exportRoute?.[2] === 'cancel' && req.method === 'POST') { await boundedJson(req); reply(res, exports.cancel(exportRoute[1])) }
+        else if (route === 'usage' && req.method === 'GET') {
           const period = url.searchParams.get('period') ?? 'thirty'
           if (!['today', 'seven', 'thirty', 'lifetime'].includes(period)) throw new LocalControlError('Invalid usage period')
           const device = url.searchParams.get('device') || undefined, project = url.searchParams.get('project') || undefined
@@ -53,13 +62,13 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
         if (!match) throw new LocalControlError('Endpoint not found', 404)
         const project = await registry.get(match[1])
         if (!match[2] && req.method === 'DELETE') { await registry.unregister(project.id); reply(res, { ok: true }) }
-        else if (!match[2] && req.method === 'GET') reply(res, await inspectProject(project))
+        else if (!match[2] && req.method === 'GET') { const inspection = await inspectProject(project); inspection.recentSession = await codexMetadataStatus(); reply(res, inspection) }
         else if (match[2] === 'document' && req.method === 'GET') reply(res, await readProjectDocument(project, url.searchParams.get('key') ?? ''))
         else if (match[2] === 'kickoff' && req.method === 'POST') { const body = await boundedJson(req); reply(res, kickoff(await inspectProject(project), String(body.task), String(body.language))) }
         else if (match[2] === 'launch' && req.method === 'POST') { const body = await boundedJson(req); if (body.confirm !== true) throw new LocalControlError('Explicit launch confirmation required'); reply(res, await launchCodex(project.path)) }
         else throw new LocalControlError('Method not allowed', 405)
       }
-    } catch (error) { reply(res, { error: { code: 'LOCAL_CONTROL', message: error instanceof LocalControlError ? error.message : 'Local operation failed; existing files were preserved' } }, error instanceof LocalControlError ? error.status : 500) }
+    } catch (error) { if (res.headersSent) res.destroy(); else reply(res, { error: { code: 'LOCAL_CONTROL', message: error instanceof LocalControlError ? error.message : 'Local operation failed; existing files were preserved' } }, error instanceof LocalControlError ? error.status : 500) }
     return true
   }
 }

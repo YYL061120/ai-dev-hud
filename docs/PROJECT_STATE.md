@@ -1,5 +1,27 @@
 # 项目状态
 
+## 最新状态：本地大历史补齐（2026-10-03 UTC）
+
+本批功能与合成验证已完成，停止新增功能，等待用户选择同步目录或云方案。未配置外部同步，未合并设备身份，未修改 HUD、provider parser 或 Dashboard 的视觉布局。
+
+Implemented: 导出按钮生成 version 1 JSONL 分块容器，每块沿用既有 usage schema，最多 1,000 条、每行最多 2 MiB；header 与精确计数的 complete footer 用于识别缺失/截断。专用 SQLite 只读 WAL 快照和磁盘 TEMP 哈希索引避免全部历史驻留 JS；下载按背压流式输出，可查询进度和立即取消，任务有数量和超时限制。旧 version 1 JSON 文件及原 API 仍兼容 10 MiB / 50,000 条界限。浏览器按行读取 JSONL，顺序提交独立原子块，按设备/记录去重，本机解析器记录优先；缓存索引在解析器或外部数据库写入后失效。取消仅在确认当前块后停止；中途失败、错误/缺失 footer、响应丢失都显示已确认前缀和安全重试说明，文件读取百分比明确不等于导入成功。
+
+官方会话元数据检查：已安装 Codex CLI 0.154.0；官方生成的公开 schema 有 `thread/list`、精确 cwd 过滤、`useStateDbOnly`。该参数用于不扫描 JSONL rollouts 的查询。然而本机 `codex app-server daemon version` 无法连接官方 control socket（Windows 错误 10050）。项目页报告 official-codex-app-server / daemon-unreachable，而不推断或伪造最近会话。检查仅执行 --version 和 daemon version，有 3 秒探测超时及 15 秒缓存；不会启动 daemon、读取原始会话、尝试登录或执行模型任务。即使 daemon 可连接，尚未建立安全 adapter 时仍明确标记 adapter-unavailable。
+
+Tests: `pnpm.cmd build` exit 0；`pnpm.cmd test` 1,120 passed、1 原有 POSIX permission skip、0 failed，126 test files（core123 / CLI861 / web44 / widget54 / site38）。60,123 条文件数据库测试覆盖超旧界限导出、61 块、WAL 快照、跨 store 实例重复导入、本机权威与缓存失效、HTTP 响应性/取消/Origin；浏览器 importer 覆盖完整/空容器、旧 JSON、截断/错误 footer、私密字段/凭据 URL、超长行、取消与不确定响应。Windows Edge 实测 100,123 条纯合成记录，50,570,485 字节，取消后保留已确认 3,000 条，完整重试约 2,898 ms；故意在服务器提交后丢弃响应，界面提示可能已提交，重试去重后最终 100,124 条。实际保存导出文件为 101 块、50,570,990 字节，footer/总数/白名单检查通过；限速合成下载时点击立即取消且原生下载失败为未完整文件。原项目首页六类 kickoff、复制、语言持久化、目录登记/注销、旧 JSON 导入、原 Codex120+Claude40=160 provider 回归通过，无 pageerror。验证均采用独立配置；未导出真实用户 metadata。
+
+运行状态：已将本任务自己的 Dashboard 服务由 PID48048 安全切换至 PID59516，仍为 127.0.0.1:3847。只读核对原 Codex Today 总数一致，新 local usage API 正常、非信任 Origin 返回403；HUD PID42052 与持久设置未变。本批 packages/widget 相对用户确认版本 1dfef6e 无差异，未停止用户 Codex 会话，未导出真实 metadata。
+
+Not completed: 真正外部同步；跨设备端到端验证；官方最近会话列表（当前 transport 不可达，adapter 尚未接入）。普通 overview 聚合仍沿用既有内存聚合，本批只声明有界传输和已验证的十万条规模，不声称任意历史规模。取消不会回滚已确认块；重新导入通过幂等去重补齐。
+
+Files changed: core usage-transfer/local-control；CLI usage/usage-export/session-metadata/local API 与大历史/只读探测测试；web usage-file、typed client、导入导出反馈和项目元数据原因；AGENTS/本计划/PRD/ARCHITECTURE/ROADMAP/PROJECT_STATE。证据和合成导出均位于仓库外 `C:\AI-Tools\ai-dev-hud-evidence`，不提交/上传。
+
+Three highest-priority manual tests:
+1. 在本地用导出按钮保存 JSONL，再重复导入两次，确认用量不增长；旧 JSON 文件也仍能导入。
+2. 用合成大文件尝试中途取消、导入截断文件，再重试完整文件；确认只报告已确认记录，失败不显示全部完成。
+3. 选中已登记项目查看官方会话来源和具体不可用原因；确认 HUD 仍按原方式滑入/收起，Dashboard 中英文及原 provider 用量正常。
+
+
 更新：2026-10-03。Phase 0/1 完成，主屏 HUD 已由用户确认滑出。本地控制中心两批通过自动验收；独立复核发现的 metadata/目录校验问题已修复，真实 Launcher 按钮已在隔离工程验证启动到认证界面。当前分支 `feat/local-control-center`；实际 Dashboard 已加载修复。近期会话接口、登录后任务执行、云后端与视觉深化尚未完成。具体最新状态见文末“独立复核修复”；下方保留历史问题和验证记录。
 
 ## 历史主屏使用反馈：修复后的用户手动验收已确认可滑出

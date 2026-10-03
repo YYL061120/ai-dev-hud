@@ -57,3 +57,7 @@ AI Dev HUD 是基于 [AIUsage](https://github.com/juliantanx/aiusage) 的本地�
 ## 限制
 
 请求数仅在 provider 已提供可信语义时标作 requests；SQLite usage record 数应标为“用量记录”，不当作消息或请求。费用是 API 等价估计，不是订阅账单。原始日志保留情况会影响历史完整性。
+
+## 已授权本地补齐验收
+
+本地 metadata 大历史导出为单个 JSONL 分块文件，块内沿用 version 1 allowlist；保留旧 JSON 的读取/API 兼容。显示已处理块/记录，支持取消，读取进度与提交成功分开。取消、损坏文件、错误 footer、网络未确认都必须提示未完整导入和已确认前缀，允许幂等重试。默认无外部传输；选择同步方式之前不配置文件夹监控或云服务。最近会话仅允许官方安全元数据接口，当前 transport 不可达时显示来源和具体原因。

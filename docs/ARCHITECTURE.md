@@ -68,3 +68,11 @@ renderer 经现有 typed IPC 接收 reveal，translateX 在原透明 HWND 内裁
 ## 原 Dashboard 语言扩展
 
 沿用 `packages/web/src/lib/i18n.js` 的 en/zh 字典与 Svelte store，以及 `aiusage-lang` 持久化 key。共用 LanguageSwitch 显示顶部双按钮，setLang 只改变语言，不重挂载页面或重新解析 usage。页面格式化显式传 `$lang`，确保会话日期等内容立即响应切换；金额仍沿用原币种/精度规则。日期-only bucket 构造本地年月日。provider、model、项目路径直接呈现原数据，不经过翻译。没有引入语言服务、云依赖或自建 dashboard。
+
+## 本地有界历史传输
+
+`usage-transfer.ts` 只定义容器 header/footer 和任务进度；record 内容继续使用 version 1 usage allowlist。`UsageMetadataStore.exportChunks()` 使用专用 readonly WAL 快照、1,000 条 keyset 批次与磁盘 TEMP 身份索引。本机记录优先；后台导入表不改 provider/parser 表。export jobs 仅保留计数，最多一个活动任务、八个历史状态，下载十分钟超时，HTTP 断开/取消释放快照；HTTP 原有鉴权/Origin/loopback 门禁保留。旧 JSON API 有界收集并明确提示使用分块导出。
+
+导入按 2 MiB 最大行解析，不读取全部 JSONL；每块使用旧原子导入和写入队列。TEMP 本机身份索引由 database 对象共享，依据 total_changes/data_version 和设备身份失效；确认导入写入后更新缓存版本，因此不会每个块重新扫描完整 provider 历史。完整文件必须有计数匹配且位于末尾的 footer。取消保留已确认块，网络丢失响应标记未知最后一块，重试去重；没有全文件事务/自动回滚。浏览器原生下载负责磁盘输出，界面展示服务端传输计数和状态。
+
+官方 Codex 元数据状态只通过官方 executable 的 daemon version 命令检查现有 transport；不启动任何服务。当前无法连接，公开 thread/list/useStateDbOnly 可行性记录在 PROJECT_STATE，尚不发起 thread/read/list，也不扫描原始会话。同步 adapter 仍只是显式配置契约；当前没有外部 adapter 执行。

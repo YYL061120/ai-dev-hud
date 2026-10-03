@@ -3,4 +3,28 @@ export const controlTranslations = {
   zh: { home: 'Codex 项目主页', usage: '本地用量', desc: '登记明确的本地目录，检查项目上下文，准备 Codex 开场提示。', directory: '项目 / 发现根目录的绝对路径', register: '登记项目', discover: '在此目录内发现', discoveryHint: '最多 200 目录 / 3 层；不跟随链接。发现结果不会自动登记。', found: '发现的项目', projects: '已登记项目', empty: '尚未登记项目。', inspect: '检查', unregister: '仅注销登记', refresh: '刷新', branch: 'Git 分支', clean: '干净', dirty: '存在未提交修改', unavailable: '不可用', engine: '引擎', documents: '项目约定文档', read: '阅读', sessions: '目前没有可用的受支持本地接口提供最近 Codex 会话元数据；不会读取原始会话正文。', task: '任务类型', continue: '继续项目', feature: '新功能', debug: '调试', architecture: '架构', review: '代码审查', 'new-project': '新项目规划', preview: '生成开场预览', copy: '复制开场提示', copied: '已复制', launch: '在所选项目打开 Codex', launchHint: '打开本地交互终端；不会自动提交开场提示。准备好后自行粘贴。', launched: '已请求启动，请检查本地终端；未提交提示词。', newHint: '仅规划：在 Codex 中明确目标与目标目录；此处不创建引擎项目或文件。', error: '操作失败', scanLimit: '发现已达到安全上限。', tokens: 'Tokens', records: '用量记录', cost: 'API 等价费用（USD）', sessionCount: '会话', today: '今日', seven: '近 7 天', thirty: '近 30 天', lifetime: '累计', models: '模型', devices: '设备', projectUsage: '项目标识', heatmap: '每日活动', export: '导出用量 metadata', import: '导入 metadata JSON', privacy: '仅汇总本机用量与显式导入的 metadata。导出排除提示词、回复、文件内容、凭据、主机名与文件系统路径；未配置云传输。', imported: '导入结果', unknown: '未知', key: '标识', filter: '按设备 / 项目筛选', all: '全部', transferHint: '版本 1 JSON，每文件最多 10 MiB / 50,000 条。按设备与记录身份去重，本机记录优先。散列属于假名化 metadata，不代表匿名。', approximate: '用量记录不等同消息或请求；费用是 API 等价估计，历史完整度取决于保留的日志。', newGoal: '新项目目标（可选，加入预览）' },
 }
 controlTranslations.en.sessions = 'Codex session metadata is not integrated yet. Raw session content is not read.'
+Object.assign(controlTranslations.en, {
+  import: 'Import metadata JSON / JSONL', fileRead: 'file read',
+  transferHint: 'Chunked version 1 JSONL supports large histories. Legacy JSON still supports up to 10 MiB / 50,000 records. Imports deduplicate and local records take precedence.',
+  cancelTransfer: 'Cancel transfer', chunks: 'chunks', confirmedRecords: 'acknowledged records',
+  'transfer-pending': 'Waiting for download', 'transfer-running': 'Transferring', 'transfer-complete': 'Transfer complete', 'transfer-cancelled': 'Transfer cancelled', 'transfer-failed': 'Transfer incomplete',
+  partialImport: 'This file was not fully imported. Acknowledged chunks remain committed. Retry the same file safely to deduplicate.',
+  uncertainImport: 'The last response was not confirmed; that chunk may have committed. Retry before assuming its outcome.',
+  sessionSource: 'Source: official Codex app-server, read-only check',
+  'session-not-checked': 'Session metadata has not been checked.', 'session-cli-unavailable': 'Official Codex CLI is unavailable.',
+  'session-daemon-unreachable': 'The official Codex metadata service is unreachable. No daemon was started and no raw sessions were scanned.',
+  'session-adapter-unavailable': 'The official service is reachable, but a safe metadata-only adapter is not connected. No raw session content is read.',
+})
+Object.assign(controlTranslations.zh, {
+  import: '导入元数据 JSON / JSONL', fileRead: '文件已读取',
+  transferHint: '分块版 1 JSONL 支持大历史。旧 JSON 仍兼容每文件 10 MiB / 50,000 条限制。仅传递元数据；按设备和记录去重，本机记录优先。',
+  cancelTransfer: '取消传输', chunks: '块', confirmedRecords: '已确认记录',
+  'transfer-pending': '等待下载', 'transfer-running': '正在传输', 'transfer-complete': '传输完成', 'transfer-cancelled': '已取消传输', 'transfer-failed': '传输未完成',
+  partialImport: '此文件未全部导入。已确认的块已保留；可安全重试同一文件并去重。',
+  uncertainImport: '最后一块的响应未确认，该块可能已提交；请重试后确认结果。',
+  sessionSource: '来源：官方 Codex app-server，只读检查',
+  'session-not-checked': '尚未检查会话元数据。', 'session-cli-unavailable': '官方 Codex CLI 不可用。',
+  'session-daemon-unreachable': '官方 Codex 元数据服务无法连接；未启动后台服务，也未扫描原始会话。',
+  'session-adapter-unavailable': '官方服务可连接，但尚未接入安全的纯元数据适配器；不读取原始会话内容。',
+})
 controlTranslations.zh.sessions = '尚未接入 Codex 会话元数据接口；不会读取原始会话正文。'

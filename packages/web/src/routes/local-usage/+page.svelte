@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { lang, getLocale, t } from '$lib/i18n.js'
   import { usageApi } from '$lib/usage-metadata'
-  import type { UsageOverview, MetadataImportResult } from '../../../../core/src/usage-metadata.js'
+  import type { UsageOverview } from '../../../../core/src/usage-metadata.js'
+  import type { UsageExportProgress } from '../../../../core/src/usage-transfer.js'
+  import { importUsageFile, type FileImportProgress } from '$lib/usage-file'
   let data: UsageOverview | null = null
   let busy = false, error = '', period = 'thirty', device = '', project = ''
-  let result: MetadataImportResult | null = null
+  let imported: FileImportProgress | null = null, exported: UsageExportProgress | null = null
+  let cancelRequested = false, mounted = true
   let devices: string[] = [], projects: string[] = []
   const periods = ['today', 'seven', 'thirty', 'lifetime'] as const
   const number = (value: number, language: string) => value.toLocaleString(getLocale(language))
@@ -17,31 +20,55 @@
     devices = all.devices.map(r => r.key); projects = all.projects.map(r => r.key)
   }
   async function exportMetadata() {
-    const transfer = await usageApi.export()
-    const blob = new Blob([JSON.stringify(transfer, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob), link = document.createElement('a')
-    link.href = url; link.download = 'ai-dev-hud-usage-metadata-v1.json'; link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    exported = await usageApi.startExport()
+    const id = exported.id, link = document.createElement('a')
+    link.href = `/api/local/usage/export-jobs/${id}/file`; link.download = 'ai-dev-hud-usage-metadata-v1.jsonl'; link.click()
+    try {
+      while (mounted && ['pending', 'running'].includes(exported.state)) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+        if (cancelRequested) exported = await usageApi.cancelExport(id)
+        else exported = await usageApi.exportStatus(id)
+      }
+    } catch (e) {
+      await usageApi.cancelExport(id).catch(() => {})
+      exported = { ...exported, state: 'failed' }
+      throw e
+    }
   }
   async function importFile(event: Event) {
     const input = event.target as HTMLInputElement, file = input.files?.[0]
     if (!file) return
-    result = null
-    await operation(async () => { if (file.size > 10 * 1024 * 1024) throw new Error('Maximum metadata file size: 10 MiB'); result = await usageApi.import(JSON.parse(await file.text())); await refresh() })
+    imported = null; exported = null; cancelRequested = false
+    await operation(async () => {
+      imported = await importUsageFile(file, usageApi.import, () => cancelRequested || !mounted, value => imported = value)
+      if (imported.state === 'failed') error = imported.message ?? $t('control.error')
+      await refresh()
+    })
     input.value = ''
   }
+  async function cancelTransfer() {
+    cancelRequested = true
+    if (exported && ['pending', 'running'].includes(exported.state)) {
+      try { exported = await usageApi.cancelExport(exported.id) }
+      catch (e) { error = e instanceof Error ? e.message : $t('control.error') }
+    }
+  }
   onMount(() => { void operation(refresh) })
+  onDestroy(() => { mounted = false; cancelRequested = true; if (exported && ['pending', 'running'].includes(exported.state)) void usageApi.cancelExport(exported.id).catch(() => {}) })
 </script>
 <svelte:head><title>{$t('control.usage')} — AI Dev HUD</title></svelte:head>
 <div class="page-header"><h1>{$t('control.usage')}</h1><p>{$t('control.privacy')}</p></div>
 {#if error}<p role="alert" class="error">{error}</p>{/if}
 <section class="card actions">
-  <button data-testid="usage-export" disabled={busy || !data} on:click={() => operation(exportMetadata)}>{$t('control.export')}</button>
-  <label class="upload">{$t('control.import')}<input data-testid="usage-import" type="file" accept=".json,application/json" disabled={busy} on:change={importFile} /></label>
+  <button data-testid="usage-export" disabled={busy} on:click={() => { cancelRequested = false; imported = null; operation(exportMetadata) }}>{$t('control.export')}</button>
+  <label class="upload">{$t('control.import')}<input data-testid="usage-import" type="file" accept=".json,.jsonl,application/json,application/x-ndjson" disabled={busy} on:change={importFile} /></label>
   <button disabled={busy} on:click={() => operation(refresh)}>{$t('control.refresh')}</button>
   <p class="hint">{$t('control.transferHint')}</p>
 </section>
-{#if result}<pre data-testid="import-result" role="status">{$t('control.imported')}: {JSON.stringify(result, null, 2)}</pre>{/if}
+{#if busy && (imported?.state === 'running' || exported && ['pending','running'].includes(exported.state))}<button data-testid="transfer-cancel" disabled={cancelRequested} on:click={cancelTransfer}>{$t('control.cancelTransfer')}</button>{/if}
+{#if exported}<p data-testid="export-progress" role="status">{$t(`control.transfer-${exported.state}`)} · {number(exported.records, $lang)} {$t('control.records')} · {number(exported.chunks, $lang)} {$t('control.chunks')}</p>{/if}
+{#if imported}<pre data-testid="import-result" role="status">{$t(`control.transfer-${imported.state}`)} · {number(imported.records, $lang)} {$t('control.confirmedRecords')} · {number(imported.chunks, $lang)} {$t('control.chunks')} · {$t('control.fileRead')} {Math.round(100 * imported.bytes / Math.max(1, imported.totalBytes))}%
+{JSON.stringify(imported.result, null, 2)}</pre>{#if imported.state === 'failed' || imported.state === 'cancelled'}<p class="hint">{$t('control.partialImport')}{#if imported.uncertain} {$t('control.uncertainImport')}{/if}</p>{/if}{/if}
 {#if data}
 <div class="totals">{#each periods as p}<section class="card" data-testid={`usage-${p}`}><h2>{$t(`control.${p}`)}</h2><strong>{number(data.periods[p].tokens, $lang)}</strong><p>{$t('control.tokens')}</p><small>{money(data.periods[p].cost, $lang)} · {number(data.periods[p].sessions, $lang)} {$t('control.sessionCount')} · {number(data.periods[p].records, $lang)} {$t('control.records')}</small></section>{/each}</div>
 <section class="card"><label for="usage-period">{$t('control.filter')}</label><div class="actions">

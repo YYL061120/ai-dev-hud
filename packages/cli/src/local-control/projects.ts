@@ -99,7 +99,7 @@ async function documentAt(root: string, relative: string): Promise<boolean> {
   } catch { return false }
 }
 export async function inspectProject(project: LocalProject): Promise<ProjectInspection> {
-  const result: ProjectInspection = { ...project, available: false, engine: 'other', git: { present: false, branch: null, dirty: null }, documents: [], recentSession: { available: false, reason: 'unsupported-metadata-interface' } }
+  const result: ProjectInspection = { ...project, available: false, engine: 'other', git: { present: false, branch: null, dirty: null }, documents: [], recentSession: { available: false, reason: 'not-checked', source: 'official-codex-app-server' } }
   try {
     const root = await canonicalDirectory(project.path)
     if (equalPath(root) !== equalPath(project.path)) throw new Error('Registered directory moved')

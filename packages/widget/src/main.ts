@@ -119,17 +119,26 @@ function applyTheme(theme: WidgetSettings['theme']): void {
   nativeTheme.themeSource = theme
 }
 
+function updateTrayToolTip(): void {
+  if (!HUD_MODE) { tray?.setToolTip('AIUsage Widget'); return }
+  const displays = screen.getAllDisplays()
+  const index = displays.findIndex(display => display.id === hudState.displayId)
+  const display = displays[index]
+  const status = hudHover.enabled ? '已启用' : '已暂停'
+  tray?.setToolTip(`AI Dev HUD · 边缘唤起${status} · 显示器 ${index + 1} ${display?.label ?? ''}`.slice(0, 127))
+}
+
 function createTray(): void {
   const { buffer, scaleFactor } = getTrayIconNativeImage()
   const icon = nativeImage.createFromBuffer(buffer, scaleFactor ? { scaleFactor } : undefined)
   tray = new Tray(icon)
-  tray.setToolTip(HUD_MODE ? 'AI Dev HUD · Codex' : 'AIUsage Widget')
+  updateTrayToolTip()
 
   tray.on('click', () => toggleWindow())
   tray.on('right-click', () => {
     const i18n = t(settings.locale)
     const menu = Menu.buildFromTemplate([
-      { label: HUD_MODE ? '启用边缘唤起' : i18n.showPanel, click: () => showWindow() },
+      { label: HUD_MODE ? `启用边缘唤起（${hudHover.enabled ? '已启用' : '已暂停'}）` : i18n.showPanel, click: () => showWindow() },
       { label: i18n.openDashboard, click: () => openDashboardAction() },
       { label: i18n.refresh, click: () => { if (HUD_MODE) void refreshHudData(true); else pushDataUpdate() } },
       ...(HUD_MODE ? [{ label: '显示器', submenu: screen.getAllDisplays().map((display, index) => ({
@@ -179,6 +188,7 @@ function showWindow(): void {
   if (HUD_MODE) {
     hudHover.setEnabled(true)
     hudState.hoverEnabled = true
+    updateTrayToolTip()
     win.webContents.send('hud:state-update', hudState)
     pushDataUpdate()
     return
@@ -195,6 +205,7 @@ function positionHud(resetReveal = false): void {
   const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
     ?? screen.getPrimaryDisplay()
   hudState.displayId = display.id
+  updateTrayToolTip()
   if (resetReveal) {
     hudHover.reset()
     hudState.reveal = 0
@@ -221,7 +232,9 @@ function startHudPointerWatch(): void {
   if (hudPollTimer) clearTimeout(hudPollTimer)
   const tick = () => {
     if (!win || win.isDestroyed()) return
-    const frame = hudHover.step(performance.now(), screen.getCursorScreenPoint(), win.getBounds())
+    const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
+      ?? screen.getPrimaryDisplay()
+    const frame = hudHover.step(performance.now(), screen.getCursorScreenPoint(), win.getBounds(), display.workArea)
     const ignoreMouse = !frame.interactive
     if (hudMouseIgnored !== ignoreMouse) {
       hudMouseIgnored = ignoreMouse
@@ -300,6 +313,7 @@ function toggleWindow(): void {
   if (HUD_MODE) {
     hudHover.setEnabled(!hudHover.enabled)
     hudState.hoverEnabled = hudHover.enabled
+    updateTrayToolTip()
     win?.webContents.send('hud:state-update', hudState)
     return
   }
@@ -624,6 +638,7 @@ ipcMain.on('widget:hide-window', () => {
   if (HUD_MODE) {
     hudHover.setEnabled(false)
     hudState.hoverEnabled = false
+    updateTrayToolTip()
     win?.webContents.send('hud:state-update', hudState)
     return
   }

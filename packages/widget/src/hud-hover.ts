@@ -2,7 +2,7 @@ import type { HudArea } from './hud-window'
 
 export interface HudPointer { x: number; y: number }
 export interface HudHoverFrame { reveal: number; visible: boolean; interactive: boolean }
-export const HUD_EDGE_WIDTH = 4
+export const HUD_EDGE_WIDTH = 8
 export const HUD_ENTER_DELAY_MS = 140
 export const HUD_LEAVE_DELAY_MS = 450
 const POINTER_MARGIN = 10
@@ -31,11 +31,14 @@ export class HudHoverController {
     if (!enabled) this.target = 0
   }
 
-  step(now: number, pointer: HudPointer, bounds: HudArea): HudHoverFrame {
+  step(now: number, pointer: HudPointer, bounds: HudArea, workArea: HudArea): HudHoverFrame {
     const previousTarget = this.target
     const right = bounds.x + bounds.width
-    const atEdge = pointer.x >= right - HUD_EDGE_WIDTH && pointer.x < right
-      && pointer.y >= bounds.y - POINTER_MARGIN && pointer.y < bounds.y + bounds.height + POINTER_MARGIN
+    // The hidden panel is undiscoverable: wake it anywhere on this monitor's
+    // usable right edge, independently of the panel height or animation width.
+    const edgeRight = workArea.x + workArea.width
+    const atEdge = pointer.x >= edgeRight - HUD_EDGE_WIDTH && pointer.x < edgeRight
+      && pointer.y >= workArea.y && pointer.y < workArea.y + workArea.height
     const revealedLeft = right - bounds.width * this.reveal
     const overPanel = this.reveal > 0 && pointer.x >= revealedLeft - POINTER_MARGIN && pointer.x < right
       && pointer.y >= bounds.y - POINTER_MARGIN && pointer.y < bounds.y + bounds.height + POINTER_MARGIN

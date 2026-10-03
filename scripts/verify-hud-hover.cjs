@@ -59,11 +59,32 @@ async function run() {
     }
     assert(frames.every(f => f.sameShell), 'Switch must retain the shell DOM node')
     if (!reduced) assert(frames.some(f => f.content.length === 2), 'Actual old/new content must overlap during crossfade')
-    // Rapid reversal while the shell is moving must not mount another shell.
-    for (let i = 0; i < 8; i++) {
-      const b = await units.nth(i % 2).boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + 20); await pause(25)
+    // 60ms interruption must keep exactly two bounded layers, with no outro accumulation.
+    await page.evaluate(() => {
+      window.rapidFrames = []
+      window.rapidSampler = setInterval(() => {
+        const shell = document.querySelector('.rail [data-testid="ring-detail"]')
+        const content = Array.from(shell?.querySelectorAll('.detail-body') ?? []).map(e => ({ key: e.dataset.contentKey, opacity: Number(getComputedStyle(e).opacity) }))
+        window.rapidFrames.push({ time: performance.now(), sameShell: shell === window.originalShell, content })
+      }, 16)
+    })
+    for (let i = 0; i < 16; i++) {
+      const b = await units.nth(i % 2).boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + 20); await pause(60)
       assert.equal(await detail.evaluate(e => e === window.originalShell), true)
     }
+    // Re-enter the same circle without replacing either live layer or restarting progress.
+    const same = await units.nth(1).boundingBox()
+    await page.mouse.move(same.x + same.width / 2 + 1, same.y + 20); await pause(60)
+    // Interrupt with a third actual device; still at most two layers.
+    await page.keyboard.press('Tab'); await units.nth(2).focus(); await pause(60)
+    await units.nth(3).focus(); await pause(60)
+    await pause(180)
+    const rapidFrames = await page.evaluate(() => { clearInterval(window.rapidSampler); return window.rapidFrames })
+    assert(rapidFrames.length > 30)
+    assert(rapidFrames.every(f => f.sameShell && f.content.length <= (reduced ? 1 : 2)), 'Interrupted transitions must not accumulate outro layers')
+    assert(rapidFrames.every(f => Math.abs(f.content.reduce((sum, layer) => sum + layer.opacity, 0) - 1) < .002), 'Content weights must retain brightness')
+    assert.equal(await page.evaluate(() => CSS.supports('mix-blend-mode', 'plus-lighter')), true)
+    if (!reduced && scale === 1) await page.screenshot({ path: path.join(evidence, 'hover-bounded-settled.png') })
     await page.mouse.move(20, 500); await pause(100); assert.equal(await detail.count(), 1)
     await page.mouse.move(first.x + first.width / 2, first.y + 20); await pause(200); assert.equal(await detail.count(), 1, 'Return must cancel pending close')
     await page.mouse.move(20, 500); await detail.waitFor({ state: 'detached', timeout: 800 }); assert.equal(await detail.count(), 0)
@@ -84,7 +105,7 @@ async function run() {
     assert(revealFrames.every(f => Math.abs(f.rail.y - railBefore.y) < .01))
     const regions = await page.evaluate(() => window.regionReports.at(-1))
     assert.equal(regions.reduced, reduced)
-    checks.push({ scale, reduced, hoverWithoutClick: true, gapHeld: true, persistentShell: true, frames, railBefore, railExpanded, revealFrames, keyboardEscape: true, dashboard: true })
+    checks.push({ scale, reduced, hoverWithoutClick: true, gapHeld: true, persistentShell: true, bounded60ms: true, rapidFrames, frames, railBefore, railExpanded, revealFrames, keyboardEscape: true, dashboard: true })
     const video = page.video(); await context.close(); await video.saveAs(path.join(evidence, `hover-path-${scale}-${reduced ? 'reduced' : 'motion'}.webm`))
   }
   assert.deepEqual(errors, [])

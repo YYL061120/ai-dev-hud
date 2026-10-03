@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import { fade, fly } from 'svelte/transition'
+  import { fly } from 'svelte/transition'
+  import { selectContent, advanceContent, type ContentBlend } from '../usage-content-transition'
   import type { UsageRing, UsageRingsSnapshot } from '../../../../core/src/usage-rings.js'
   export let snapshot: UsageRingsSnapshot
   export let language = 'zh'
@@ -13,6 +14,7 @@
   export let density: 'page' | 'hud' = 'page'
   const dispatch = createEventDispatcher<{ select: string }>()
   let root: HTMLElement, popupTop = 0, popupHeight = 288, popupWidth = 300, popupLeft = 0, pointer = 50, mounted = false, reduced = false, pageVisible = true
+  let blend: ContentBlend<UsageRing> = { progress: 1 }, contentFrame = 0
   let frame = 0, closeTimer: ReturnType<typeof setTimeout> | undefined
   let inputMode: 'pointer' | 'keyboard' = 'pointer'
   let positionedKey: string | null = null
@@ -35,6 +37,20 @@
     positionedKey = activeKey
     const button = root.querySelector(`[data-key="${activeKey}"]`)
     if (button) position(button as HTMLElement)
+  }
+  $: if (mounted) updateContent(active, reduced || !visible || !pageVisible)
+  $: layers = [blend.previous, blend.current].filter((ring): ring is UsageRing => !!ring)
+  function updateContent(next: UsageRing | undefined, immediate: boolean) {
+    const selected = selectContent(blend, next, immediate)
+    if (selected.current?.key === blend.current?.key && selected.previous?.key === blend.previous?.key && selected.progress === blend.progress) { blend = selected; return }
+    cancelAnimationFrame(contentFrame); contentFrame = 0; blend = selected
+    if (!blend.previous || blend.progress === 1) return
+    let last = performance.now()
+    const step = (now: number) => {
+      blend = advanceContent(blend, now - last); last = now
+      if (mounted && blend.previous) contentFrame = requestAnimationFrame(step); else contentFrame = 0
+    }
+    contentFrame = requestAnimationFrame(step)
   }
   $: if (mounted) updateMotion(snapshot, visible, pageVisible, reduced)
   function updateMotion(next: UsageRingsSnapshot, shown: boolean, foreground: boolean, reduce: boolean) {
@@ -102,7 +118,7 @@
     animate(snapshot)
     return () => { geometry.disconnect(); motion.removeEventListener('change', changed); document.removeEventListener('visibilitychange', visibility) }
   })
-  onDestroy(() => { mounted = false; cancelAnimationFrame(frame); stopClosing() })
+  onDestroy(() => { mounted = false; cancelAnimationFrame(frame); cancelAnimationFrame(contentFrame); stopClosing() })
 </script>
 
 <svelte:window on:keydown={(event) => { inputMode = 'keyboard'; if (event.key === 'Escape' && activeKey) { activeKey = null; event.stopImmediatePropagation() } }} on:pointerdown={() => inputMode = 'pointer'} />
@@ -122,18 +138,20 @@
   </div>
   {#if detailsEnabled && active && visible && pageVisible}
     <section class="detail" data-testid="ring-detail" aria-label={label(active)} style={`left:${popupLeft}px;--popup-top:${popupTop}px;--popup-left:${popupLeft}px;--popup-width:${popupWidth}px;--popup-height:${popupHeight}px;--ring-color:${color(active)};--pointer:${pointer}px`} on:mouseenter={stopClosing} transition:fly={{ x: reduced ? 0 : compact ? 12 : 0, y: reduced || compact ? 0 : -5, duration: reduced ? 0 : 240 }}>
-      {#key active.key}
-      <div class="detail-body" in:fade={{ duration: reduced ? 0 : 160 }} out:fade={{ duration: reduced ? 0 : 120 }}>
-      <header><div><h3>{label(active)}</h3><small>{dateRange()}</small></div><button class="close" on:keydown={keydown} on:click={() => activeKey = null} aria-label={words('关闭明细', 'Close details')}>×</button></header>
-      <div class="big">{number(active.tokens)}<small>tokens</small></div>
-      <p class="muted">{active.kind === 'total' ? words('总量标识 · 非订阅额度', 'Total marker · not a quota') : active.share === null ? words('暂无占比分母', 'No share denominator') : `${(active.share * 100).toFixed(1)}% · ${words('同周期已采集总量', 'of collected usage this period')}`}</p>
-      <div class="provenance"><span>{source(active)}</span>{#if active.source === 'imported' || active.source === 'mixed'}<small>{words('最近接收：', 'Last received: ')}{active.importedAt === null ? words('未知', 'Unknown') : new Date(active.importedAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}</small>{/if}</div>
-      <p class="muted">{number(active.sessions)} {words('会话', 'sessions')} · {number(active.records)} {words('用量记录', 'usage records')}</p>
-      <div class="metrics"><span>{words('API 等价费用', 'API-equivalent cost')}</span><b>{cost(active)}</b></div>
-      {#if active.missingEstimates}<p class="muted">{number(active.missingEstimates)} {words('条记录无估值', 'records without an estimate')}</p>{/if}
-      <div class="model-list">{#each active.models as model}<div class="model"><div><span>{model.model}</span><b>{compactNumber(model.tokens)}</b></div><small>{model.tool} · {model.provider} · {cost(model)}</small><div class="bar"><i style:width={`${active.tokens ? model.tokens / active.tokens * 100 : 0}%`}></i></div></div>{:else}<p class="muted">{words('该周期无已采集记录', 'No collected records this period')}</p>{/each}</div>
+      <div class="detail-layers">
+      {#each layers as content (content.key)}
+      <div class="detail-body" data-content-key={content.key} style={`opacity:${content.key === blend.current?.key ? blend.progress : 1 - blend.progress};--ring-color:${color(content)}`} aria-hidden={content.key !== blend.current?.key} inert={content.key !== blend.current?.key}>
+      <header><div><h3>{label(content)}</h3><small>{dateRange()}</small></div><button class="close" on:keydown={keydown} on:click={() => activeKey = null} aria-label={words('关闭明细', 'Close details')}>×</button></header>
+      <div class="big">{number(content.tokens)}<small>tokens</small></div>
+      <p class="muted">{content.kind === 'total' ? words('总量标识 · 非订阅额度', 'Total marker · not a quota') : content.share === null ? words('暂无占比分母', 'No share denominator') : `${(content.share * 100).toFixed(1)}% · ${words('同周期已采集总量', 'of collected usage this period')}`}</p>
+      <div class="provenance"><span>{source(content)}</span>{#if content.source === 'imported' || content.source === 'mixed'}<small>{words('最近接收：', 'Last received: ')}{content.importedAt === null ? words('未知', 'Unknown') : new Date(content.importedAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}</small>{/if}</div>
+      <p class="muted">{number(content.sessions)} {words('会话', 'sessions')} · {number(content.records)} {words('用量记录', 'usage records')}</p>
+      <div class="metrics"><span>{words('API 等价费用', 'API-equivalent cost')}</span><b>{cost(content)}</b></div>
+      {#if content.missingEstimates}<p class="muted">{number(content.missingEstimates)} {words('条记录无估值', 'records without an estimate')}</p>{/if}
+      <div class="model-list">{#each content.models as model}<div class="model"><div><span>{model.model}</span><b>{compactNumber(model.tokens)}</b></div><small>{model.tool} · {model.provider} · {cost(model)}</small><div class="bar"><i style:width={`${content.tokens ? model.tokens / content.tokens * 100 : 0}%`}></i></div></div>{:else}<p class="muted">{words('该周期无已采集记录', 'No collected records this period')}</p>{/each}</div>
       </div>
-      {/key}
+      {/each}
+      </div>
     </section>
   {/if}
 </div>
@@ -157,7 +175,8 @@
   .detail-body::-webkit-scrollbar,.model-list::-webkit-scrollbar,.hud .ring-dock::-webkit-scrollbar { width:5px; }
   .detail-body::-webkit-scrollbar-thumb,.model-list::-webkit-scrollbar-thumb,.hud .ring-dock::-webkit-scrollbar-thumb { background:#53535c; border-radius:5px; }
   .detail::after { content:''; position:absolute; top:-12px; left:0; width:100%; height:12px; }
-  .detail-body { grid-area:1 / 1; min-width:0; }
+  .detail-layers { grid-area:1 / 1; display:grid; min-height:0; isolation:isolate; }
+  .detail-body { grid-area:1 / 1; min-width:0; mix-blend-mode:plus-lighter; }
   .detail { display:grid; }
   .compact.hud .ring-dock { max-height:144px; overflow-y:auto; scrollbar-width:none; }
   .compact.hud .detail { position:absolute; left:var(--popup-left) !important; top:var(--popup-top); margin:0; width:var(--popup-width); height:var(--popup-height); grid-template-rows:minmax(0,1fr); border-radius:24px; }

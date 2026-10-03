@@ -2,7 +2,7 @@
 
 ## 当前悬停动效结构（2026-10-03）
 
-HUD使用固定透明canvas（376×536 DIP）和单独居中rail（56×216 DIP），原生展开状态仅推送typed状态，不resize窗口。摘要opacity/transform过渡，compact UsageRings在rail左侧展示同一detail壳；位置/尺寸/尖角CSS过渡，内容keyed crossfade，初入/退出可反向的Svelte transition。模型列表在随壳尺寸变化的滚动区内裁切。
+HUD使用固定透明canvas（376×536 DIP）和单独居中rail（56×216 DIP），原生展开状态仅推送typed状态，不resize窗口。摘要opacity/transform过渡，compact UsageRings在rail左侧展示同一detail壳；位置/尺寸/尖角CSS过渡，内容经usage-content-transition纯presentation helper保持最多两层crossfade（无outro积累），反向交换层保留权重，同圈重入保留进度；隔离plus-lighter合成保持共同文字亮度，初入/退出可反向的Svelte transition。模型列表在随壳尺寸变化的滚动区内裁切。
 
 renderer只报告有界HudArea矩形与reduced-motion，不访问DB/日志。main验证sender/数字/画布边界，setShape排除透明背景和外侧8 DIP；pointer polling仅决定showInactive、interactive和临界阻尼reveal。额外detailBridgeHeld保留原生孔洞中的圈到卡走廊，hover不需要激活窗口或点击。report相同几何不重复IPC。32 DIP/140 ms保持；本轮离开缓冲220 ms，数字/弧和native/renderer壳均尊重reduced-motion。显示器暂时断开只回退，不覆盖持久偏好；重新接入定位回原选择。
 

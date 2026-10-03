@@ -1,5 +1,25 @@
 # 项目状态
 
+## 独立复核 P2：快速反向内容层有界（2026-10-03 UTC）
+
+Implemented: 修复keyed fade在60 ms往返中累积多个outro层的问题。新增纯presentation ContentBlend，最多current/previous两层；反向交换层并保留当前权重，同圈重入不重启动画，第三设备中断仅保留占主导的旧层。移除内容outro，单壳/尖角动效保持；isolated plus-lighter合成避免共同文字在crossfade中因常规alpha叠加变暗。正常crossfade仍会短暂显示两份不同内容，这是预期过渡，不再累积第三层。
+
+Not completed: 物理桌面pointer、真实150%主屏及混合DPI、真实背景点击投递仍未实测。当前实际枚举仅KB220Q H2（4189372782，100%）；原AW2725QF preferredDisplay1220717916恢复属于设置恢复，不是150%实测。Library准备入口失败且无确认IDs，未绕过既定上传路径。
+
+Files changed: UsageRings.svelte；web/lib/usage-content-transition.ts与tests/usage-content-transition.test.ts；scripts/verify-hud-hover.cjs；docs/PROJECT_STATE.md、HANDOFF.md、ARCHITECTURE.md。
+
+Tests: 完整build exit0；完整test exit0，1138 passed / 1既有POSIX skip / 0 failed，129 files。3条新增单测覆盖60 ms反向/同圈、重复第三设备中断、reduced/close。生产组件4组连续路径全部通过：normal共215帧最多2层，reduced共206帧最多1层，内容权重和最大误差约1e-6；均同一shell，零pageerror。60 ms往返16次、同圈重入、第三/第四圈中断、键盘/收起/Dashboard正常。16组/62圈布局复跑通过，实际100% Electron原生bounds/rail/注入走廊/不focus复跑通过。
+
+新证据在C:\AI-Tools\ai-dev-hud-evidence\hover-bounded：hover-continuity.json；4份hover-path-*.webm；9帧hover-switch-*.png；bounded-video-frame-{0,1,2}.png（新版录制3.4/3.6/4.0秒抽帧，已目视检查：仅预期两层淡化或单层，无多outro堆积）；hover-native-bounds.json；rings-layout-regression.json；bounded-{build,tests,layout}.log。保留原证据不覆盖。
+
+正式恢复：正常launcher最新PID18040；preferredDisplay1220717916和设置SHA256 0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2未变，Dashboard3847/auth/status HTTP200。常驻实际原生bounds未测，不用隔离实例代替。完成本轮后停止。
+
+Three highest-priority manual tests:
+1. 总圈↔本机圈60 ms快速往返、同圈重入和第三设备中断，观察是否出现额外旧内容层、明显变暗或壳/尖角跳变。
+2. 原150%主屏重新被枚举后实测pointer路径、混合DPI、持久偏好、focus及真实背景点击穿透。
+3. normal/reduced、Tab/Escape、多设备及窄屏、中英Dashboard和大历史传输回归。
+
+
 ## 最新阶段：悬停明细与连续动效（2026-10-03 UTC）
 
 

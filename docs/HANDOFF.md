@@ -2,6 +2,25 @@
 
 更新：2026-10-03 UTC。本轮代码、完整构建/测试、生产组件视频回归及当前可见屏的原生集成已完成；真实物理桌面路径和原主屏验收尚有阻塞。完成本轮验证后停止，等待明确下一项授权。
 
+## 独立复核 P2：快速反向内容层有界（2026-10-03 UTC）
+
+Implemented: 修复keyed fade在60 ms往返中累积多个outro层的问题。新增纯presentation ContentBlend，最多current/previous两层；反向交换层并保留当前权重，同圈重入不重启动画，第三设备中断仅保留占主导的旧层。移除内容outro，单壳/尖角动效保持；isolated plus-lighter合成避免共同文字在crossfade中因常规alpha叠加变暗。正常crossfade仍会短暂显示两份不同内容，这是预期过渡，不再累积第三层。
+
+Not completed: 物理桌面pointer、真实150%主屏及混合DPI、真实背景点击投递仍未实测。当前实际枚举仅KB220Q H2（4189372782，100%）；原AW2725QF preferredDisplay1220717916恢复属于设置恢复，不是150%实测。Library准备入口失败且无确认IDs，未绕过既定上传路径。
+
+Files changed: UsageRings.svelte；web/lib/usage-content-transition.ts与tests/usage-content-transition.test.ts；scripts/verify-hud-hover.cjs；docs/PROJECT_STATE.md、HANDOFF.md、ARCHITECTURE.md。
+
+Tests: 完整build exit0；完整test exit0，1138 passed / 1既有POSIX skip / 0 failed，129 files。3条新增单测覆盖60 ms反向/同圈、重复第三设备中断、reduced/close。生产组件4组连续路径全部通过：normal共215帧最多2层，reduced共206帧最多1层，内容权重和最大误差约1e-6；均同一shell，零pageerror。60 ms往返16次、同圈重入、第三/第四圈中断、键盘/收起/Dashboard正常。16组/62圈布局复跑通过，实际100% Electron原生bounds/rail/注入走廊/不focus复跑通过。
+
+新证据在C:\AI-Tools\ai-dev-hud-evidence\hover-bounded：hover-continuity.json；4份hover-path-*.webm；9帧hover-switch-*.png；bounded-video-frame-{0,1,2}.png（新版录制3.4/3.6/4.0秒抽帧，已目视检查：仅预期两层淡化或单层，无多outro堆积）；hover-native-bounds.json；rings-layout-regression.json；bounded-{build,tests,layout}.log。保留原证据不覆盖。
+
+正式恢复：正常launcher最新PID18040；preferredDisplay1220717916和设置SHA256 0B8F01CDE4F30A02DD528CAB3F36C88010E38D23E8CCED7851C01068A8B4DCC2未变，Dashboard3847/auth/status HTTP200。常驻实际原生bounds未测，不用隔离实例代替。完成本轮后停止。
+
+Three highest-priority manual tests:
+1. 总圈↔本机圈60 ms快速往返、同圈重入和第三设备中断，观察是否出现额外旧内容层、明显变暗或壳/尖角跳变。
+2. 原150%主屏重新被枚举后实测pointer路径、混合DPI、持久偏好、focus及真实背景点击穿透。
+3. normal/reduced、Tab/Escape、多设备及窄屏、中英Dashboard和大历史传输回归。
+
 ## 授权与边界
 
 仓库C:\AI-Tools\ai-dev-hud；分支feat/local-control-center。起点3292973129417d83861206974d2ac998dfb6c26e（交接docs），上一产品44e148f。本轮正常提交/push已授权，最终版本用git log/status核对。不改main/历史、AI-usage-tracker、Codex内部配置、provider parser、云同步或引擎集成。真数据仅一台Windows，手动导入不代表在线；不造设备/配额/回本。
@@ -13,7 +32,7 @@ https://www.xiaohongshu.com/discovery/item/6aa5a806000000002502f8ac
 
 ## 当前实现
 
-Implemented: main使用固定透明376×536 DIP画布，rail在窗口内x320/y160/56×216，沿旧中心固定；展开不再改原生bounds。renderer分离rail、摘要和compact左侧明细，悬停无需click。明细保持同一section壳，位置/宽高/尖角连续过渡；keyed内容120/160 ms交叉淡化，壳首次/退出240 ms，移动280 ms。native临界阻尼保留反向速度，renderer补40 ms连续平移，仍保留32 DIP/140 ms与外侧8 DIP；离开缓冲本轮改220 ms。卡片和rail联合区域保留，原生透明孔洞中的间隙由typed detailBridgeHeld通知取消关闭。setShape只保留画面矩形/尖角，透明背景和8 DIP由原生孔洞保护；实际Windows点击投递仍待手测。reduced-motion覆盖数字/弧/壳/尖角/原生reveal。HUD和网页共用typed UsageRings，原摘要、多设备footer、窄屏ResizeObserver、中英与历史传输保留。暂时断开屏的回退不覆盖记住的显示器ID，重新接入可回到原选择。
+Implemented: main使用固定透明376×536 DIP画布，rail在窗口内x320/y160/56×216，沿旧中心固定；展开不再改原生bounds。renderer分离rail、摘要和compact左侧明细，悬停无需click。明细保持同一section壳，位置/宽高/尖角连续过渡；keyed内容160 ms最多两层有界交叉淡化（详见上述P2复核），壳首次/退出240 ms，移动280 ms。native临界阻尼保留反向速度，renderer补40 ms连续平移，仍保留32 DIP/140 ms与外侧8 DIP；离开缓冲本轮改220 ms。卡片和rail联合区域保留，原生透明孔洞中的间隙由typed detailBridgeHeld通知取消关闭。setShape只保留画面矩形/尖角，透明背景和8 DIP由原生孔洞保护；实际Windows点击投递仍待手测。reduced-motion覆盖数字/弧/壳/尖角/原生reveal。HUD和网页共用typed UsageRings，原摘要、多设备footer、窄屏ResizeObserver、中英与历史传输保留。暂时断开屏的回退不覆盖记住的显示器ID，重新接入可回到原选择。
 
 Files changed: packages/web/src/lib/components/UsageRings.svelte；packages/widget/src/{hud-hover,hud-window,main,preload}.ts、renderer/Hud.svelte；widget/tests/{hud-hover,hud-window}.test.ts；scripts/verify-hud-hover.cjs、verify-hud-native-bounds.cjs；docs/HANDOFF.md、PROJECT_STATE.md、ARCHITECTURE.md。
 

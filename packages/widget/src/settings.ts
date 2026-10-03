@@ -12,6 +12,7 @@ export interface WidgetSettings {
   showTokenBreakdown: boolean
   locale: 'en' | 'zh'
   currency: CurrencyCode
+  hudDisplayId?: number
 }
 
 const SETTINGS_PATH = join(homedir(), '.aiusage', 'widget-settings.json')

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HudHoverController, HUD_ENTER_DELAY_MS, HUD_LEAVE_DELAY_MS } from '../src/hud-hover'
+import { getHudDisplayId } from '../src/hud-window'
 
 const bounds = { x: 2504, y: 588, width: 56, height: 216 }
 const workArea = { x: 0, y: 0, width: 2560, height: 1392 }
@@ -38,11 +39,28 @@ describe('HUD edge reveal controller', () => {
     }
   })
   it('ignores the other monitor edge, outside the near-edge strip and taskbar area', () => {
-    for (const pointer of [{ x: 3639, y: 50 }, { x: 2551, y: 50 }, { x: 2559, y: 1392 }, { x: 2560, y: 650 }]) {
+    for (const pointer of [{ x: 3639, y: 50 }, { x: 2527, y: 50 }, { x: 2559, y: 1392 }, { x: 2560, y: 650 }]) {
       const controller = new HudHoverController()
       controller.step(0, pointer, bounds, workArea)
       expect(controller.step(1000, pointer, bounds, workArea)).toEqual({ reveal: 0, visible: false, interactive: false })
     }
+  })
+  it('accepts a dwell inside the monitor seam band while leaving rail buttons clickable', () => {
+    const controller = new HudHoverController()
+    const seam = { x: 2536, y: 50 }
+    controller.step(0, seam, bounds, workArea)
+    expect(controller.step(HUD_ENTER_DELAY_MS - 1, seam, bounds, workArea).visible).toBe(false)
+    controller.step(HUD_ENTER_DELAY_MS, seam, bounds, workArea)
+    expect(controller.step(700, seam, bounds, workArea).visible).toBe(true)
+    expect(controller.step(720, panel, bounds, workArea).interactive).toBe(true)
+    expect(controller.step(740, edge, bounds, workArea).interactive).toBe(false)
+  })
+  it('restores a chosen monitor and uses primary for first launch or a missing monitor', () => {
+    const displays = [{ id: 101 }, { id: 202 }]
+    expect(getHudDisplayId(displays, undefined, 101)).toBe(101)
+    expect(getHudDisplayId(displays, 101, 101)).toBe(101)
+    expect(getHudDisplayId(displays, 202, 101)).toBe(202)
+    expect(getHudDisplayId(displays, 303, 101)).toBe(101)
   })
   it('produces intermediate slide frames and keeps the trigger edge click-through', () => {
     const controller = new HudHoverController()

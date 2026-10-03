@@ -7,7 +7,7 @@ import { EXCHANGE_RATE_SOURCE } from './currency'
 import type { ExchangeRateState } from './currency'
 import { queryWidgetData } from './data'
 import { queryHudData, unavailableHudData } from './hud-data'
-import { getHudBounds } from './hud-window'
+import { getHudBounds, getHudDisplayId } from './hud-window'
 import type { HudState } from './hud-window'
 import { HudHoverController } from './hud-hover'
 import { isDashboardReachable, probeDashboard, refreshDashboard } from './dashboard-client'
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
 
   applyTheme(settings.theme)
   if (HUD_MODE) {
-    hudState.displayId = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+    hudState.displayId = getHudDisplayId(screen.getAllDisplays(), settings.hudDisplayId, screen.getPrimaryDisplay().id)
     screen.on('display-added', () => positionHud(true))
     screen.on('display-removed', () => positionHud(true))
     screen.on('display-metrics-changed', () => positionHud(true))
@@ -205,6 +205,10 @@ function positionHud(resetReveal = false): void {
   const display = screen.getAllDisplays().find(display => display.id === hudState.displayId)
     ?? screen.getPrimaryDisplay()
   hudState.displayId = display.id
+  if (settings.hudDisplayId !== display.id) {
+    settings = { ...settings, hudDisplayId: display.id }
+    saveSettings(settings)
+  }
   updateTrayToolTip()
   if (resetReveal) {
     hudHover.reset()
@@ -627,8 +631,12 @@ ipcMain.handle('widget:get-exchange-rate', async () => {
 })
 
 ipcMain.handle('widget:save-settings', (_event, newSettings: WidgetSettings) => {
-  settings = newSettings
+  settings = { ...newSettings, hudDisplayId: newSettings.hudDisplayId ?? settings.hudDisplayId }
   saveSettings(settings)
+  if (HUD_MODE) {
+    const displayId = getHudDisplayId(screen.getAllDisplays(), settings.hudDisplayId, screen.getPrimaryDisplay().id)
+    if (displayId !== hudState.displayId) { hudState.displayId = displayId; positionHud(true) }
+  }
   applyTheme(settings.theme)
   startAutoRefresh()
   return settings

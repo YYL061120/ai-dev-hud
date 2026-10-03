@@ -2,7 +2,8 @@ import type { HudArea } from './hud-window'
 
 export interface HudPointer { x: number; y: number }
 export interface HudHoverFrame { reveal: number; visible: boolean; interactive: boolean }
-export const HUD_EDGE_WIDTH = 8
+export const HUD_EDGE_WIDTH = 32
+export const HUD_CLICK_THROUGH_WIDTH = 8
 export const HUD_ENTER_DELAY_MS = 140
 export const HUD_LEAVE_DELAY_MS = 450
 const POINTER_MARGIN = 10
@@ -74,7 +75,7 @@ export class HudHoverController {
       this.reveal = this.target; this.velocity = 0
     }
     const interactive = this.enabled && this.reveal > 0.05
-      && pointer.x >= right - bounds.width * this.reveal && pointer.x < right - HUD_EDGE_WIDTH
+      && pointer.x >= right - bounds.width * this.reveal && pointer.x < right - HUD_CLICK_THROUGH_WIDTH
       && pointer.y >= bounds.y && pointer.y < bounds.y + bounds.height
     return { reveal: this.reveal, visible: this.reveal > 0 || this.target === 1, interactive }
   }

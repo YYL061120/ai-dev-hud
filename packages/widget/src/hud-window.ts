@@ -6,6 +6,11 @@ export const HUD_EXPANDED_HEIGHT = 536
 export interface HudState { expanded: boolean; displayId: number; reveal: number; hoverEnabled: boolean }
 export interface HudArea { x: number; y: number; width: number; height: number }
 
+/** Restore the chosen monitor; default and unplugged-monitor fallback are primary. */
+export function getHudDisplayId(displays: Array<{ id: number }>, preferred: number | undefined, primaryId: number): number {
+  return displays.some(display => display.id === preferred) ? preferred! : primaryId
+}
+
 /** Electron screen/workArea and window bounds use DIP, including mixed-DPI monitors. */
 export function getHudBounds(area: HudArea, expanded: boolean): HudArea {
   const width = Math.min(area.width, expanded ? HUD_EXPANDED_WIDTH : HUD_COLLAPSED_WIDTH)

@@ -1,10 +1,20 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { captureClaudeSubscription, readClaudeSubscription } from '../src/local-control/subscriptions.js'
 async function* input(value: unknown) { yield Buffer.from(JSON.stringify(value)) }
 describe('passive official statusline adapter', () => {
+  it('prioritizes invalidation at exactly the same millisecond in either write order', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    try {
+      for (const values of [[72, null], [null, 72]]) {
+        const directory = await mkdtemp(join(tmpdir(), 'hud-subscription-equal-'))
+        for (const value of values) await captureClaudeSubscription(input(value === null ? {} : { rate_limits: { seven_day: { used_percentage: value } } }), directory)
+        expect((await readClaudeSubscription(directory))?.windows).toEqual([])
+      }
+    } finally { clock.mockRestore() }
+  })
   it.each([72, null])('does not let delayed old capture overwrite a newer observation (%s)', async percentage => {
     const directory = await mkdtemp(join(tmpdir(), 'hud-subscription-race-'))
     let release!: () => void

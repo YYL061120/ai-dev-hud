@@ -8,6 +8,7 @@ export interface SubscriptionWindow {
 export interface ToolSubscription {
   /** Opaque login-generation proof supplied only by an authenticated integration, never device identity. */
   generation?: string | null
+  validUntil?: number
   tool: string; scope: 'account-shared'; source: 'codex-app-server' | 'claude-statusline'
   observedAt: number; windows: SubscriptionWindow[]
 }
@@ -26,7 +27,7 @@ function window(value: unknown, bucketId: string, bucketName: string | null, slo
 export function normalizeCodexRateLimits(value: unknown, observedAt = Date.now()): ToolSubscription {
   const payload = object(value), buckets = object(payload.rateLimitsByLimitId), single = object(payload.rateLimits)
   // Reject the observation rather than collapse distinct unsafe identities into a shared sentinel.
-  if (Object.keys(buckets).some(id => safeUsageIdentifier(id) !== id) || typeof single.limitId === 'string' && safeUsageIdentifier(single.limitId) !== single.limitId) return { tool: 'codex', scope: 'account-shared', source: 'codex-app-server', observedAt, windows: [] }
+  if (Object.keys(buckets).length ? Object.keys(buckets).some(id => safeUsageIdentifier(id) !== id) : typeof single.limitId === 'string' && safeUsageIdentifier(single.limitId) !== single.limitId) return { tool: 'codex', scope: 'account-shared', source: 'codex-app-server', observedAt, windows: [] }
   const entries = Object.keys(buckets).length ? Object.entries(buckets) : Object.keys(single).length ? [[typeof single.limitId === 'string' ? single.limitId : 'codex', single] as const] : []
   const windows = entries.flatMap(([id, value]) => {
     const row = object(value), name = typeof row.limitName === 'string' ? safeUsageIdentifier(row.limitName) : null
@@ -45,6 +46,7 @@ export function normalizeClaudeStatusline(value: unknown, observedAt = Date.now(
 export function subscriptionWindowState(subscription: ToolSubscription | undefined, window: SubscriptionWindow | undefined, now = Date.now(), currentGeneration?: string | null): 'available' | 'stale' | 'unknown' {
   if (!subscription?.generation || !currentGeneration || subscription.generation !== currentGeneration) return 'unknown'
   if (!subscription || !window || window.usedPercent === null) return 'unknown'
+  if (subscription.validUntil !== undefined && (!Number.isFinite(subscription.validUntil) || subscription.validUntil <= now)) return 'stale'
   if (!Number.isFinite(subscription.observedAt) || subscription.observedAt > now + 30_000 || now - subscription.observedAt > SUBSCRIPTION_FRESHNESS_MS || window.resetsAt !== null && window.resetsAt <= now) return 'stale'
   return 'available'
 }

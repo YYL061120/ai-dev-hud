@@ -1,5 +1,7 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+最新交接：[CODEX_QUOTA_LIVE_HANDOFF.md](CODEX_QUOTA_LIVE_HANDOFF.md)。后续审查认可纯内存 type/email/planType 前后比较；真实 Codex 已可发布随机观察代际及最多 30 秒 validUntil，15 秒重验，UI 每秒失效。此前永久 unknown 结论已替代；外部切号延迟和同邮箱/套餐工作区歧义仍明确保留。原身份不日志/落盘/传 UI。SQLite OS 锁取代目录锁解决崩溃恢复，同毫秒空快照失效优先，合法 map 忽略未用 legacy 非法 ID。完整实测与未测见最新交接。
+
 ## 最新交接：审查修复后的保守额度边界（2026-10-03 UTC）
 
 最终事实、固定修复 SHA、官方账号协议探测字段及正式恢复信息见 [ACCOUNT_QUOTA_REVIEW.md](ACCOUNT_QUOTA_REVIEW.md)。stdio 同连接前后 account/read 与额度查询均成功；未知原因是缺稳定非秘密账号字段，不是权限/接口不可用。随机连接 generation 不能替代账号证明。

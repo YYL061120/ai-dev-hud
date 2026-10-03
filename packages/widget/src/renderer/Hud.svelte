@@ -37,7 +37,7 @@
       const key = JSON.stringify([regions, reduced])
       if (key !== regionKey) { regionKey = key; api.setRegions?.(regions, reduced) }
     }
-    const timer = setInterval(report, 32), freshness = setInterval(() => now = Date.now(), 15_000)
+    const timer = setInterval(report, 32), freshness = setInterval(() => now = Date.now(), 1000)
     motion.addEventListener('change', report)
     report()
     void refresh(); void api.getState().then(value => state = value).catch(() => error = '无法读取窗口状态')

@@ -2,6 +2,8 @@
 
 ### 审查后的账号额度边界（2026-10-03）
 
+后续审查认可的短时方案已替代下文永久 unknown：同一连接非空 type/email/planType 只在内存前后比较，无账号事件/错误/异常退出才发布随机观察 generation、observedAt、最多 30 秒 validUntil，正常 EOF 可保留到截止；15 秒重验，UI 每秒失效。外部切号存在延迟，同邮箱/同套餐工作区无法严格区分，不声称瞬时一致。捕获使用现有 SQLite BEGIN IMMEDIATE OS 锁，进程死亡自动释放，不抢活锁；同毫秒空观察优先，其他观察按入口 hrtime 顺序；只校验使用的 map/fallback ID。详见 CODEX_QUOTA_LIVE_HANDOFF.md。
+
 窗口观察不等同当前账号授权。ToolSubscription.generation 仅允许可靠认证集成提供 opaque 登录代际；UsageRingsSnapshot.subscriptionGenerations 是独立确认的当前代际。消费端缺失/不一致时未知，连旧窗口 metadata 也隐藏。目前两种被动来源不能确认代际，readSubscriptions 丢弃窗口，parser/诊断仍可独立验证官方数据格式。不读取持久凭据、不保存原始账号身份，严禁将 deviceKey/session_id/email 当账号代际。
 
 Claude capture 用目录独占锁覆盖读取旧 observedAt、比较、临时写入、rename；入口时间防止延迟输入回灌，较新空观察也有效。锁有界失败，不擅自回收未知持有者。非法桶 ID 拒绝整份观察，保持合法多桶语义。

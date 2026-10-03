@@ -113,7 +113,7 @@
     if (activeKey === r.key) activeKey = null; else open(r, button)
   }
   onMount(() => {
-    const freshness = setInterval(() => now = Date.now(), 15_000)
+    const freshness = setInterval(() => now = Date.now(), 1000)
     mounted = true; pageVisible = !document.hidden
     const motion = matchMedia('(prefers-reduced-motion: reduce)')
     const changed = () => { reduced = motion.matches }

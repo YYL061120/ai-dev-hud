@@ -22,6 +22,7 @@
       <header><h4>{toolName(group.tool)}</h4><span title={words('基于已采集用量的金额估算，非订阅账单', 'Estimated from collected usage; not a subscription bill')}>{money(group.cost, group.missingEstimates)}</span></header>
       {#if subscription?.windows.length}
         <p class="scope">{words('账号共享', 'Shared account')}</p>
+        {#if subscription.validUntil !== undefined}<p class="observation">{words('当前 Codex CLI 账号 · 核验 ', 'Current Codex CLI account · checked ')}{new Date(subscription.observedAt).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')} · {words('有效至 ', 'valid until ')}{new Date(subscription.validUntil).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>{/if}
         {#each subscription.windows as window}
           {@const status = subscriptionWindowState(subscription, window, now, snapshot.subscriptionGenerations?.[group.tool])}
           <div class="quota" data-quota-state={status}>

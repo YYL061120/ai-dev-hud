@@ -3,6 +3,13 @@ import { normalizeCodexRateLimits, normalizeClaudeStatusline, subscriptionRingWi
 import { buildUsageRings, ringToolUsage } from '../src/usage-rings.js'
 const now = 1_800_000_000_000
 describe('official account subscription observations', () => {
+  it('validates only the authoritative map and expires a verified observation at its short TTL', () => {
+    const value = normalizeCodexRateLimits({ rateLimits: { limitId: 'unused legacy bucket', primary: { usedPercent: 99 } }, rateLimitsByLimitId: { codex: { primary: { usedPercent: 35, windowDurationMins: 180 } } } }, now)
+    expect(value.windows[0].usedPercent).toBe(35)
+    value.generation = 'A'; value.validUntil = now + 30_000
+    expect(subscriptionWindowState(value, value.windows[0], now, 'A')).toBe('available')
+    expect(subscriptionWindowState(value, value.windows[0], now + 30_000, 'A')).toBe('stale')
+  })
   it('prefers multiple buckets, preserves their identity and actual windows without assuming slot durations', () => {
     const value = normalizeCodexRateLimits({ rateLimits: { primary: { usedPercent: 99 } }, rateLimitsByLimitId: {
       codex: { limitName: 'Codex', primary: { usedPercent: 12, windowDurationMins: 15, resetsAt: (now + 1000) / 1000 }, secondary: { usedPercent: 34, windowDurationMins: 10080 } },

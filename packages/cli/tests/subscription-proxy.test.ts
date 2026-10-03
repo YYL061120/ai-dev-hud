@@ -4,53 +4,60 @@ import { PassThrough } from 'node:stream'
 const mocks = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node:child_process', async original => ({ ...await original<typeof import('node:child_process')>(), spawn: mocks.spawn }))
 import { readCodexProxy, readCodexStdio } from '../src/local-control/subscriptions.js'
+const account = (email: string | null = 'PRIVATE_A@example.invalid', planType = 'pro') => ({ account: { type: 'chatgpt', email, planType } })
 function proxy() {
   const child = Object.assign(new EventEmitter(), { stdin: new PassThrough(), stdout: new PassThrough(), kill: vi.fn() })
   mocks.spawn.mockReturnValue(child)
   return child
 }
-describe('bounded existing-daemon quota proxy', () => {
+const reply = (child: ReturnType<typeof proxy>, id: number, result: unknown) => child.stdout.write(JSON.stringify({ id, result }) + '\n')
+function success(child: ReturnType<typeof proxy>, before = account(), after = before) {
+  reply(child, 1, {}); reply(child, 2, before)
+  reply(child, 3, { rateLimits: { limitId: 'codex', primary: { usedPercent: 0, windowDurationMins: 300 } }, credentials: 'PRIVATE_SECRET' })
+  reply(child, 4, after)
+}
+describe('bounded official account quota connection', () => {
   beforeEach(() => vi.clearAllMocks())
-  it('uses only initialize and rateLimits/read, projects allowed fields and terminates the proxy', async () => {
-    const child = proxy(), result = readCodexProxy('official-codex.exe')
-    child.stdout.write(JSON.stringify({ id: 1, result: {} }) + '\n')
-    child.stdout.write(JSON.stringify({ method: 'unrelated', params: { secret: 'PRIVATE_FIXTURE' } }) + '\n')
-    child.stdout.write(JSON.stringify({ id: 2, result: { rateLimits: { limitId: 'codex', primary: { usedPercent: 10, windowDurationMins: 30 } }, credentials: 'PRIVATE_FIXTURE' } }) + '\n')
+  it('verifies the same account before and after quota without returning identity, retaining only an opaque generation and TTL', async () => {
+    const child = proxy(), result = readCodexProxy('official-codex.exe'); success(child)
     const value = await result
     expect(mocks.spawn).toHaveBeenCalledWith('official-codex.exe', ['app-server', 'proxy'], expect.objectContaining({ windowsHide: true }))
-    expect(child.stdin.read()?.toString()).toMatch(/initialize.*\n.*initialized.*\n.*account\/rateLimits\/read/s)
-    expect(value?.windows[0]).toMatchObject({ usedPercent: 10, durationMinutes: 30 })
-    expect(JSON.stringify(value)).not.toContain('PRIVATE_FIXTURE')
-    expect(child.kill).toHaveBeenCalledTimes(1)
+    const requests = child.stdin.read()?.toString().trim().split('\n').map((line: string) => JSON.parse(line))
+    expect(requests.map((r: any) => r.method)).toEqual(['initialize', 'initialized', 'account/read', 'account/rateLimits/read', 'account/read'])
+    expect(requests.filter((r: any) => r.method === 'account/read').map((r: any) => r.params)).toEqual([{ refreshToken: false }, { refreshToken: false }])
+    expect(value?.windows[0].usedPercent).toBe(0)
+    expect(value?.generation).toMatch(/^[a-f0-9-]{36}$/)
+    expect(value!.validUntil! - Date.now()).toBeGreaterThan(29_000)
+    expect(value!.validUntil! - Date.now()).toBeLessThanOrEqual(30_000)
+    expect(JSON.stringify(value)).not.toMatch(/PRIVATE|email|planType|credentials/)
   })
-  it('returns unavailable for official errors without exposing server messages', async () => {
-    const child = proxy(), result = readCodexProxy('official-codex.exe')
-    child.stdout.write(JSON.stringify({ id: 1, error: { message: 'PRIVATE_ERROR' } }) + '\n')
-    expect(await result).toBeUndefined(); expect(child.kill).toHaveBeenCalledTimes(1)
-  })
-  it('bounds oversized responses and handles process failure', async () => {
-    let child = proxy(), result = readCodexProxy('official-codex.exe')
-    child.stdout.write('x'.repeat(1024 * 1024 + 1))
-    expect(await result).toBeUndefined(); expect(child.kill).toHaveBeenCalledTimes(1)
-    child = proxy(); result = readCodexProxy('official-codex.exe'); child.emit('error', new Error('PRIVATE_ERROR'))
+  it.each([account('PRIVATE_B@example.invalid'), account(null), account(''), account('PRIVATE_A@example.invalid', 'plus'), { account: null }])('rejects changed or unconfirmed account %s', async after => {
+    const child = proxy(), result = readCodexProxy('official-codex.exe'); success(child, account(), after)
     expect(await result).toBeUndefined()
   })
-  it('queries a short-lived stdio child and closes stdin before resolving on normal exit', async () => {
-    const child = proxy(), result = readCodexStdio('official-codex.exe')
-    child.stdout.write(JSON.stringify({ id: 1, result: {} }) + '\n')
-    child.stdout.write(JSON.stringify({ id: 2, result: { rateLimits: { limitId: 'codex', primary: { usedPercent: 0, windowDurationMins: 300 } } } }) + '\n')
-    expect(child.stdin.writableEnded).toBe(true)
-    expect(child.kill).not.toHaveBeenCalled()
-    child.emit('close', 0)
-    expect((await result)?.windows[0].usedPercent).toBe(0)
-    expect(mocks.spawn).toHaveBeenCalledWith('official-codex.exe', ['app-server', '--listen', 'stdio://', '-c', 'analytics.enabled=false'], expect.objectContaining({ windowsHide: true }))
-  })
-  it('does not answer token-refresh requests or begin authentication', async () => {
-    const child = proxy(), result = readCodexStdio('official-codex.exe')
-    child.stdout.write(JSON.stringify({ id: 'auth-refresh', method: 'account/chatgptAuthTokens/refresh', params: { fixture: 'PRIVATE' } }) + '\n')
-    const sent = child.stdin.read()?.toString()
-    expect(sent).not.toMatch(/auth-refresh|login|tokens|PRIVATE/)
-    child.emit('close', 0)
+  it.each(['account/updated', 'account/login/completed', 'account/chatgptAuthTokens/refresh'])('invalidates on %s, including an event after the quota response', async method => {
+    const child = proxy(), result = readCodexStdio('official-codex.exe'); success(child)
+    child.stdout.write(JSON.stringify({ method, params: { secret: 'PRIVATE' } }) + '\n'); child.emit('close', 0)
     expect(await result).toBeUndefined()
+    expect(child.stdin.read()?.toString()).not.toMatch(/PRIVATE|login\/start|refreshToken":true/)
+  })
+  it('normal EOF preserves completed observations, abnormal close invalidates and each connection uses a new generation', async () => {
+    let child = proxy(), result = readCodexStdio('official-codex.exe'); success(child)
+    expect(child.stdin.writableEnded).toBe(true); expect(child.kill).not.toHaveBeenCalled(); child.emit('close', 0)
+    const first = await result
+    child = proxy(); result = readCodexStdio('official-codex.exe'); success(child); child.emit('close', 0)
+    expect((await result)?.generation).not.toBe(first?.generation)
+    child = proxy(); result = readCodexStdio('official-codex.exe'); success(child); child.emit('close', 1)
+    expect(await result).toBeUndefined()
+  })
+  it('invalidates malformed, oversized, errored and premature-close replies without returning private server messages', async () => {
+    for (const kind of ['malformed', 'oversized', 'error', 'close']) {
+      const child = proxy(), result = readCodexProxy('official-codex.exe')
+      if (kind === 'malformed') child.stdout.write('bad\n')
+      else if (kind === 'oversized') child.stdout.write('x'.repeat(1024 * 1024 + 1))
+      else if (kind === 'error') child.stdout.write(JSON.stringify({ id: 1, error: { message: 'PRIVATE' } }) + '\n')
+      else child.emit('close', 0)
+      expect(await result).toBeUndefined()
+    }
   })
 })

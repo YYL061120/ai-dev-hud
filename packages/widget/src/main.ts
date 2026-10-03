@@ -56,6 +56,7 @@ let tray: Tray | null = null
 let win: BrowserWindow | null = null
 let db: InstanceType<typeof Database> | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
+let quotaRefreshTimer: ReturnType<typeof setInterval> | null = null
 let positionRetryTimers: Array<ReturnType<typeof setTimeout>> = []
 let settings: WidgetSettings = loadSettings()
 let exchangeRate: ExchangeRateState = loadExchangeRateCache()
@@ -361,6 +362,11 @@ function pushDataUpdate(): void {
 
 function startAutoRefresh(): void {
   if (refreshTimer) clearInterval(refreshTimer)
+  if (quotaRefreshTimer) clearInterval(quotaRefreshTimer)
+  if (HUD_MODE) quotaRefreshTimer = setInterval(() => {
+    if (hudRefreshPromise || hudAuthenticationPort !== null) return
+    void fetchUsageRings(getDashboardPort()).then(rings => { hudRings = rings; win?.webContents.send('hud:data-update', getHudData()) }).catch(() => { hudRings = undefined; win?.webContents.send('hud:data-update', getHudData()) })
+  }, 15_000)
   refreshTimer = setInterval(() => {
     if (HUD_MODE) void refreshHudData()
     else pushDataUpdate()

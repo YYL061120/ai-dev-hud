@@ -1,5 +1,7 @@
 # 项目状态
 
+最新阶段已接入真实 Codex 有界额度：[CODEX_QUOTA_LIVE_HANDOFF.md](CODEX_QUOTA_LIVE_HANDOFF.md)。后续审查认可纯内存账号前后比较，不再因缺稳定 accountID 永久未知；427 ms 实测两个 available 窗口，30 秒 TTL / 15 秒重验，原身份不输出或持久化。全量 build 成功，1163 passed / 1 既有 skip / 0 failed。SQLite OS 锁崩溃自动释放，同毫秒空快照优先、合法 map 不受未用 legacy 字段影响。下方结论为历史阶段，具体限制和最终验证以最新交接为准。
+
 ## 独立审查修复与额度归属降级（2026-10-03 UTC，优先于下方历史结论）
 
 最终固定提交、生产像素/原生验证及官方 account/read→额度→account/read 实测字段和失败层级见 [ACCOUNT_QUOTA_REVIEW.md](ACCOUNT_QUOTA_REVIEW.md)。查询成功且无认证失败；当前账号响应仅 type/email/planType、账号事件仅 authMode/planType，缺少可用的稳定非秘密身份，未使用邮箱或随机连接代际冒充账号证明。

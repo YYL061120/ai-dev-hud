@@ -46,8 +46,10 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
           if (ringPeriods !== null && ringPeriods !== 'all') throw new LocalControlError('Invalid ring periods')
           const overview = store.overview(period, device, project, undefined, ringPeriods === 'all')
           const subscriptions = await readSubscriptions()
+          const subscriptionGenerations = Object.fromEntries(subscriptions.filter(value => value.generation && (value.validUntil ?? 0) > Date.now()).map(value => [value.tool, value.generation!]))
           overview.rings.subscriptions = subscriptions
-          for (const snapshot of Object.values(overview.ringPeriods ?? {})) snapshot.subscriptions = subscriptions
+          overview.rings.subscriptionGenerations = subscriptionGenerations
+          for (const snapshot of Object.values(overview.ringPeriods ?? {})) { snapshot.subscriptions = subscriptions; snapshot.subscriptionGenerations = subscriptionGenerations }
           overview.projectLabels = Object.fromEntries((await registry.list()).map(item => [store.projectKeyFor(item.path), item.name]))
           reply(res, overview)
         } else if (route === 'usage/export' && req.method === 'GET') {

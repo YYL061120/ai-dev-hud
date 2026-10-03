@@ -67,7 +67,11 @@
       catch (e) { error = e instanceof Error ? e.message : $t('control.error') }
     }
   }
-  onMount(() => { void operation(refresh) })
+  onMount(() => {
+    void operation(refresh)
+    const timer = setInterval(() => { if (mounted && !busy && !document.hidden) void operation(refresh) }, 15_000)
+    return () => clearInterval(timer)
+  })
   onDestroy(() => { mounted = false; cancelRequested = true; if (exported && ['pending', 'running'].includes(exported.state)) void usageApi.cancelExport(exported.id).catch(() => {}) })
 </script>
 <svelte:head><title>{$t('control.usage')} — AI Dev HUD</title></svelte:head>

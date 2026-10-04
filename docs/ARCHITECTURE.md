@@ -1,5 +1,11 @@
 # AI Dev HUD 架构与仓库侦察
 
+## 本地文件夹同步（2026-10-04）
+
+CLI `local-control/folder-sync.ts` 为独立文件系统 transport/controller，复用 `UsageMetadataStore.localSyncPage()` 本机 allowlist 投影及 `import()` 事务，provider parser 不变。私人 SQLite 保存配置/摘要/修订/收据/轮转检查点/进程 lease。core `FolderSyncStatus` 为有类型本地 DTO；web 只调用 loopback、Origin 和既有认证保护的 API，不读日志/DB。serve 将采集与合并放入既有写队列，HUD 继续读取既有 rings API。独立 `dist-collector` 提供无 Electron 的 Codex/Claude `folder-sync --watch`。
+
+外部目录只写 version 1 usage JSONL 不可变原子批次和空心跳，不传 config/state/SQLite/账号观察。单调修订捕获历史更正，不重新导出他机。启用须用户明确选目录，默认关闭，暂停持久化。未调用 Drive 云 API、安装后台任务或访问真实 Drive；上限、恢复、克隆边界及 Mac 未测见 [SYNC_SETUP.md](SYNC_SETUP.md)。
+
 2026-10-04 本地扩展：[CLAUDE_SESSION_HANDOFF.md](CLAUDE_SESSION_HANDOFF.md)。presentation 只消费 core Claude DTO 和 typed subscription；CLI manager 处理显式配置生命周期，claude-observation 处理白名单窗口与会话信号，file-mutex 用 SQLite OS 锁串行化。原 provider parsing 不变；Claude session-observed 不证明账号归属，与 Codex account-shared 的短时内存核验分开。
 
 ### 审查后的账号额度边界（2026-10-03）

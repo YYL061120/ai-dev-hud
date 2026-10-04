@@ -1,5 +1,28 @@
 # 项目状态
 
+## 2026-10-04：自动用量文件夹同步，本地验证完成
+
+Implemented:
+新增默认关闭的 Google Drive 本地目录 transport，复用已有 parser、metadata allowlist 和 JSONL 协议。Windows serve 采集/合并进入既有写队列，web 提供显式目录启用/暂停/立即同步、最后成功/错误/设备 last seen；HUD 继续使用原 rings API。Mac 有独立 dist-collector，无 Electron 的 Codex/Claude headless watch。独立随机 writer、机器绑定散列、原子不可变批次、单调历史修订、持久收据/轮转/lease；防自导入、再导出他机、重复和身份碰撞，半写入/损坏不删源文件。60 秒补扫、指数退避和文件/记录/目录/时间上限。CLI 状态不打印私有同步路径。
+
+Not completed:
+真实 Mac/笔记本部署、真实 Google Drive 三机自动同步、File Provider 和用户实际用量验收；没有安装后台任务、重新启动真实 HUD/Dashboard、配置真实目录、上传私人 usage 或截图。桌面真实目录此前 Access denied，本轮没有再访问或绕过；其他机器仅记录配置需求，真实路径/邮箱不进 Git。完整克隆且 OS 标识/主机/目录均相同仍不能自动区分；parser 单次采集不可抢占，暂停等待其返回，详见 SYNC_SETUP。无 push，保留既有未推送历史。
+
+Files changed:
+core folder-sync DTO/index；CLI folder-sync controller/命令、usage 本机分页、serve/API/cli 接线与 collector 构建；web FolderSync 与 local-usage 接线；17 条同步测试、serve-binding mock、production 验证脚本；SYNC_SETUP/LOCAL_DEVICE_TRANSFER/ARCHITECTURE/HANDOFF/PROJECT_STATE、package scripts/gitignore。另修复既有 subscriptions 超时 Promise 的 resolve(undefined) 类型错误，不改变行为。provider parser、HUD 动画/费用映射/Claude 接入逻辑保持原实现。
+
+Tests:
+全量 pnpm.cmd build 和 build:collector 成功；pnpm.cmd test：1199 passed / 1 既有 Windows POSIX 条件 skip / 0 failed，134 files（core140/web52/widget59/CLI910/site38）。CLI tsc --noEmit 成功。新增17项覆盖隐私、未知字段、symlink/junction/traversal、巨大文件/记录数/批次数/目录项上限、完成尾行、并发、乱序重复/更正、身份克隆、暂停重启/跨进程暂停、离线/无权限、断点/坏文件修复及 UTC/上海/洛杉矶日历聚合。无权限为不存在/不可访问目录通用错误路径测试，不是实际拒绝的 Drive 目录测试。
+
+生产 CLI/API/Svelte 隔离三节点 synthetic：600/600/600、3设备、重复稳定、collector-only 命令可用、网页启用/暂停/恢复、恶意Origin403、白名单检查及0 pageerrors；截图已目视，圈数值稳定后截图。首次全量测试的重复命令注册及mock问题已修复并全量重跑；后续 UI 验收暴露初始化响应覆盖用户目录输入的竞争，已修复、重建并生产验证。HUD 4组正常/reduced×scale hover 与16组生产布局回归通过。未把合成 Mac 当真实 Mac。
+
+证据均在允许的本机隔离目录，未入 Git：仓库 `.tmp/folder-sync-evidence` 的 build/tests/types/collector/GUI/hover/layout 日志；Temp `hud-folder-sync-evidence-p8Uvus` 的 JSON/PNG；Temp `hud-hover-9DRC5P` 的 JSON/视频；layout 日志含16组几何检查。最终提交由 git log 核对；此节不嵌入自身提交 SHA。
+
+Three highest-priority manual tests:
+1. 三机各自取得本地版本并构建、保持独立身份；在正常权限下确认离线同步目录，Windows 网页显式启用、Mac --enable 后 --watch，不复制私人 DB/state。
+2. 各机产生少量真实 Codex/Claude 用量，比较今日/累计/设备 last seen；断网/睡眠/未下载后恢复，确认更正、暂停和重复不涨总量。
+3. 两 Windows 实际 HUD 主屏/混合DPI/边缘/穿透和 Claude 状态回归；Mac 采集进程长期运行及用户自行预览登录任务。完成本轮后等待后续明确授权。
+
 ## 2026-10-04 真实未知金额追加修复
 
 后续交接：指定 GitHub 仓库的一次正常 push 重试仍被自动审批阻止，未执行上传，未绕过。详细理由和新同步阶段边界见 [HANDOFF.md](HANDOFF.md)。用户报告其他两台电脑已看到相同内容；这不是本机实测自动同步证据。Cursor 保持现状，本轮不开始同步改码。代码提交仍为 `746f61a` / `66e902e`，本轮仅更新交接文档。

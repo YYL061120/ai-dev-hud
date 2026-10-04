@@ -1,5 +1,22 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+## 最新阶段：自动用量文件夹同步（2026-10-04）
+
+Implemented: 已完成本地文件夹同步 MVP：默认关闭、用户选目录启用、原子 metadata JSONL、本机独立身份/修订/收据/轮转检查点、60秒周期及退避、Windows 网页状态/控制、Mac 独立 collector。复用既有 typed parser/storage/API，HUD不改动画，Cursor保持现状。实际运行步骤、边界与未测项目见 [SYNC_SETUP.md](SYNC_SETUP.md)。
+
+Not completed: 没有读取/写入真实 Drive 目录或操作另两机，没有真实三机部署验收、后台任务安装、私人上传、截图上传或push。用户三机hello一致仍只是用户证据。现场仅隔离三节点 synthetic。parser 单次不能抢占及完全克隆身份的限制已披露。真实常驻应用未重启，需用户自行运行本地版本。
+
+Files changed: core folder-sync DTO；CLI controller/命令/usage分页/serve/API/构建；web FolderSync；17项同步测试和生产脚本；中文状态/架构/设置/传输文档。既有 subscriptions Promise 超时 resolve(undefined) 仅修类型检查。
+
+Tests: 全量build、collector build、CLI tsc通过；1199 passed / 1既有skip / 0failed，134 files；production三节点600/600/600、网页启用/暂停/恢复、隐私/Origin403、0pageerrors，合成截图已看；HUD4组hover和16组布局回归通过。最终现场UI证据为Temp hud-folder-sync-evidence-p8Uvus；日志在仓库忽略的.tmp/folder-sync-evidence。失败曾暴露重复注册/mock与UI初始响应输入竞争，均已修复重跑，不添加skip。
+
+Three highest-priority manual tests:
+1. 用户各机安装本地版本、保持独立state/DB、按本机真实路径显式启用；Mac只collector。
+2. 少量真实用量验证三机今日/累计及last seen、暂停/断网/睡眠恢复，不把hello或synthetic当真实sync成功。
+3. 两Windows真实HUD主屏/混合DPI/穿透/Claude回归，Mac长期采集及登录启动由用户显式配置。
+
+提交仅本地feat/local-control-center，起点fa898fd，旧746f61a/66e902e/fa898fd未改写、不push。真实路径含个人邮箱，只用于用户本机设置，不写到文档/fixture/metadata。
+
 旧版恢复提示修复：返回 missing-progress-boundary，明确原会话不能自动恢复，指引开启新的 Claude Code 会话，或本地用量 → Claude 本地额度接入 → 预览停用并恢复 → 确认停用并恢复 → 预览启用 → 确认启用。保守边界不变；真实用户配置未改。最终 build 通过，1175 passed / 1 既有 skip / 0 failed，133 files；生产中英提示与三种即时撤销回归通过。独立审查的 Electron 连接超时，只有实现方此前的隔离原生测试通过，未完成全部独立原生验收。
 
 最新修复：[CLAUDE_CLEAR_FIX.md](CLAUDE_CLEAR_FIX.md)。清除以每会话响应进度边界阻断较早输入；Web/HUD 管理操作同步撤销 Claude，tokens 保留，进行中的旧读取不能回填。build 通过，1174 passed / 1 既有 skip / 0 failed；生产 Web 三组、隔离 Electron 三组及原生双屏回归通过，实际用户 Claude 未启用。

@@ -43,6 +43,7 @@
   "scripts": {
     "prepack": "cp ../../README.md README.md",
     "build": "tsup && node scripts/copy-web.js",
+    "build:collector": "tsup --out-dir dist-collector",
     "dev": "tsx src/index.ts serve",
     "cli": "tsx src/index.ts",
     "test": "vitest run",

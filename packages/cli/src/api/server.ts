@@ -9,6 +9,7 @@ import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig } from '../conf
 import { browserProtocol, isTrustedApiRequest } from './trust.js'
 import { createLocalControlHandler } from './local-control.js'
 import { UsageMetadataStore } from '../local-control/usage.js'
+import type { FolderSyncController } from '../local-control/folder-sync.js'
 import { ensureAiusageDir, getState } from '../init.js'
 import { LocalControlError } from '../local-control/projects.js'
 import { credentialStatus, publicSyncConfig, setSyncCredentials } from './credential-settings.js'
@@ -394,6 +395,7 @@ async function proxyCloudSyncStatus(res: http.ServerResponse): Promise<void> {
 
 
 export interface ApiServerOptions {
+  folderSync?: FolderSyncController
   currentDeviceInstanceId?: string
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
   onSyncStart?: () => SyncStartResult
@@ -632,7 +634,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     }
     if (!id || id === 'unknown') throw new LocalControlError('Stable local device identity is not initialized', 503)
     return new UsageMetadataStore(db, id)
-  }, runDbWrite)
+  }, runDbWrite, undefined, options?.folderSync)
   const getDbWriteQueueStatus = options?.getDbWriteQueueStatus ?? (() => localWriteQueue.getStatus())
   let pricingRecalcStatus = emptyPricingRecalcStatus()
   let pricingNeedsRecalcSince: number | null = null

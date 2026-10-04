@@ -27,10 +27,20 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { captureClaudeSubscription } from './local-control/subscriptions.js'
 import { runClaudeStatusline } from './local-control/claude-observation.js'
+import { runFolderSync } from './commands/folder-sync.js'
 
 const DB_PATH = join(AIUSAGE_DIR, 'cache.db')
 
 const program = new Command()
+
+program.command('folder-sync').description('本地脱敏用量文件夹同步；默认不开启')
+  .option('--directory <path>', '用户明确选定的已有同步目录')
+  .option('--enable', '确认启用并允许写入脱敏 usage metadata')
+  .option('--pause', '持久暂停同步')
+  .option('--once', '执行一次有界采集及同步')
+  .option('--status', '显示本机同步状态，不显示私人目录路径')
+  .option('--watch', '每 60 秒补扫；失败指数退避，Ctrl+C 停止')
+  .action(async options => { try { await runFolderSync(options) } catch (error) { console.error(error instanceof Error ? error.message : '文件夹同步失败'); process.exitCode = 1 } })
 
 program.command('claude-statusline').requiredOption('--installation <id>').requiredOption('--state-dir <path>').description('Compose original statusline output with explicitly enabled local session observations').action(async options => {
   try { process.exitCode = await runClaudeStatusline(process.stdin, options.installation, options.stateDir) } catch { process.exitCode = 1 }

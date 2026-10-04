@@ -36,6 +36,13 @@ function localRow(row: any, currentId: string, pricing?: (model: string) => Pric
 export class UsageMetadataStore {
   constructor(private db: Database.Database, private currentId: string) {}
   projectKeyFor(cwd: string): string { return hash('project', `${deviceKeyFor(this.currentId)}\0${projectPathKey(cwd)}`) }
+  /** Automatic transport excludes imported and foreign-device rows. Rolling rowid
+   * reconciliation detects old corrections even when updated_at was not bumped. */
+  localSyncPage(cursor: number, limit = 1000): { cursor: number; records: UsageMetadataRecord[]; complete: boolean } {
+    const rows = this.db.prepare(`SELECT rowid AS cursor, ${projection} FROM records WHERE ${LOCAL_RECORDS_WHERE} AND rowid>? ORDER BY rowid LIMIT ?`).all(cursor, limit) as any[]
+    const project = this.localProjector(), key = deviceKeyFor(this.currentId)
+    return { cursor: rows.at(-1)?.cursor ?? cursor, records: rows.map(project).filter(r => r.deviceKey === key), complete: rows.length < limit }
+  }
   private exists() { return !!this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='hud_usage_metadata'").get() }
   private localRecords(): UsageMetadataRecord[] {
     // Explicit projection: no raw content, source_file, hostnames, or tool-call arguments are read.

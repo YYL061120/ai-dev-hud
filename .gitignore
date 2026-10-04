@@ -25,5 +25,6 @@ RELEASE.md
 /.worktrees/
 /.codegraph/
 /.tmp/
+**/dist-collector/
 aiusage-data/
 blog/

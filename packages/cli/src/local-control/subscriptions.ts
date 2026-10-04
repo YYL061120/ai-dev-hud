@@ -50,7 +50,7 @@ function readCodexRpc(executable: string, args: string[], timeout: number, grace
     const finish = (value?: ToolSubscription) => {
       if (finished) return
       finished = true; result = value; identity = undefined; quota = undefined; clearTimeout(timer); child.stdin.end()
-      if (graceful) termination = setTimeout(() => { result = undefined; child.kill(); resolve() }, 1000)
+      if (graceful) termination = setTimeout(() => { result = undefined; child.kill(); resolve(undefined) }, 1000)
       else { child.kill(); resolve(result) }
     }
     const timer = setTimeout(() => finish(), timeout)

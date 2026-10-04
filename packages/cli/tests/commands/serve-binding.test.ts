@@ -7,7 +7,7 @@ vi.mock('node:fs', async (original) => ({ ...await original<typeof import('node:
 vi.mock('../../src/config.js', async (original) => ({ ...await original<typeof import('../../src/config.js')>(), loadConfig: vi.fn(() => ({ exchangeRate: 1 })) }))
 vi.mock('../../src/api/server.js', () => ({ createApiServer: vi.fn(() => http.createServer()) }))
 vi.mock('../../src/commands/parse.js', () => ({ runParse: vi.fn(async () => ({ parsedCount: 0, toolCallCount: 0 })) }))
-vi.mock('../../src/init.js', () => ({ getState: vi.fn(() => null) }))
+vi.mock('../../src/init.js', () => ({ getState: vi.fn(() => null), ensureAiusageDir: vi.fn() }))
 vi.mock('../../src/runtime/settings-controller.js', () => ({ RuntimeSettingsController: class { start() {} stop() {} } }))
 
 describe('serve binding', () => {

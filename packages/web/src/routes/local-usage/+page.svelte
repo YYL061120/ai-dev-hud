@@ -8,6 +8,7 @@
   import { beginUsageExport } from '$lib/usage-export-lifecycle'
   import UsageRings from '$lib/components/UsageRings.svelte'
   import ClaudeIntegration from '$lib/components/ClaudeIntegration.svelte'
+  import FolderSync from '$lib/components/FolderSync.svelte'
   import { invalidateSubscriptionSnapshot } from '../../../../core/src/usage-rings.js'
   let data: UsageOverview | null = null
   let busy = false, error = '', period = 'thirty', device = '', project = ''
@@ -92,6 +93,7 @@
 <svelte:head><title>{$t('control.usage')} — AI Dev HUD</title></svelte:head>
 <div class="page-header"><h1>{$t('control.usage')}</h1><p>{$t('control.privacy')}</p></div>
 <ClaudeIntegration language={$lang} onQuotaChange={claudeQuotaChanged} />
+<FolderSync on:changed={() => operation(refresh)} />
 {#if error}<p role="alert" class="error">{error}</p>{/if}
 <section class="card actions">
   <button data-testid="usage-export" disabled={busy} on:click={startExport}>{$t('control.export')}</button>

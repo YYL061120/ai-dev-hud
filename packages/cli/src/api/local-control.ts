@@ -9,6 +9,7 @@ import { UsageExportJobs } from '../local-control/usage-export.js'
 import { codexMetadataStatus } from '../local-control/session-metadata.js'
 import { readSubscriptions } from '../local-control/subscriptions.js'
 import { ClaudeStatuslineManager } from '../local-control/claude-integration.js'
+import type { FolderSyncController } from '../local-control/folder-sync.js'
 export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new LocalControlError('JSON content type required', 415)
   const chunks: Buffer[] = []; let bytes = 0
@@ -20,7 +21,7 @@ export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024
   } catch { throw new LocalControlError('Invalid JSON') }
 }
 export const reply = (res: http.ServerResponse, body: unknown, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)) }
-export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json')), usage?: () => UsageMetadataStore, runWrite: <T>(task: () => T | Promise<T>) => Promise<T> = async task => task(), claude = new ClaudeStatuslineManager()) {
+export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json')), usage?: () => UsageMetadataStore, runWrite: <T>(task: () => T | Promise<T>) => Promise<T> = async task => task(), claude = new ClaudeStatuslineManager(), folder?: FolderSyncController) {
   const exports = new UsageExportJobs()
   return async (req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> => {
     if (!url.pathname.startsWith('/api/local/')) return false
@@ -30,6 +31,14 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
       const remote = req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? ''
       if (!isLoopbackHost(remote) || !isLoopbackHost(new URL(`http://${req.headers.host}`).hostname)) throw new LocalControlError('Local computer access required', 403)
       const route = url.pathname.slice('/api/local/'.length)
+      if (route === 'folder-sync' && req.method === 'GET') { if (!folder) throw new LocalControlError('文件夹同步服务未运行', 503); reply(res, folder.status()); return true }
+      if (route === 'folder-sync/configure' && req.method === 'POST') {
+        if (!folder) throw new LocalControlError('文件夹同步服务未运行', 503)
+        const body = await boundedJson(req)
+        if (Object.keys(body).some(k => !['directory', 'enabled', 'confirm'].includes(k))) throw new LocalControlError('未知同步配置字段')
+        reply(res, await folder.configure(body.directory, body.enabled, body.confirm)); return true
+      }
+      if (route === 'folder-sync/run' && req.method === 'POST') { if (!folder) throw new LocalControlError('文件夹同步服务未运行', 503); await boundedJson(req); reply(res, await folder.syncNow()); return true }
       if (route === 'claude/statusline' && req.method === 'GET') { reply(res, await claude.status()); return true }
       if (route === 'claude/statusline/preview' && req.method === 'POST') {
         const body = await boundedJson(req)

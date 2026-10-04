@@ -10,7 +10,8 @@ import { runParse } from './parse.js'
 import { runSync } from './sync.js'
 import { cleanOldData } from './clean.js'
 import { uploadLeaderboardData } from './leaderboard-upload.js'
-import { getState } from '../init.js'
+import { getState, ensureAiusageDir } from '../init.js'
+import { FolderSyncController } from '../local-control/folder-sync.js'
 import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
 import { getSyncTarget } from '../sync/target.js'
@@ -102,7 +103,13 @@ export function serve(options: ServeOptions): void {
   })
   runtimeSettings.start()
 
+  ensureAiusageDir(AIUSAGE_DIR)
+  const folderDeviceId = getState(AIUSAGE_DIR)?.deviceInstanceId
+  const folderSync = folderDeviceId && folderDeviceId !== 'unknown' ? new FolderSyncController({ db: options.db, deviceId: folderDeviceId, runWrite: runDbWrite, collect: () => runParse(options.db) }) : undefined
+  folderSync?.start()
+
   const apiServer = createApiServer(options.db, {
+    folderSync,
     currentDeviceInstanceId: getState(AIUSAGE_DIR)?.deviceInstanceId,
     onRefresh: () => runParse(options.db),
     onSyncStart: () => syncRuntime.start(),
@@ -208,6 +215,7 @@ export function serve(options: ServeOptions): void {
     }
 
     runtimeSettings.stop()
+    folderSync?.stop()
     throw error
   })
 
@@ -221,7 +229,7 @@ export function serve(options: ServeOptions): void {
   const shutdown = createGracefulShutdownHandler({
     server,
     cleanup,
-    stopRuntime: () => runtimeSettings.stop(),
+    stopRuntime: () => { runtimeSettings.stop(); folderSync?.stop() },
   })
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)

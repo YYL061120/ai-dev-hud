@@ -1,4 +1,4 @@
-export type ClaudeObservationReason = 'disabled' | 'waiting-response' | 'missing-session' | 'multiple-sessions' | 'expired' | 'cleared' | 'configuration-conflict' | 'missing-windows'
+export type ClaudeObservationReason = 'disabled' | 'waiting-response' | 'missing-session' | 'multiple-sessions' | 'expired' | 'cleared' | 'missing-progress-boundary' | 'configuration-conflict' | 'missing-windows'
 export interface ClaudeStatuslineStatus {
   enabled: boolean
   configured: boolean

@@ -97,6 +97,18 @@ describe('explicit local Claude statusline composition', () => {
     await captureManagedClaude(payload('fixture-session-A',65,3),id,f.state,Date.now()+31003)
     expect(JSON.parse(await readFile(join(f.state,'claude-session-observations.json'),'utf8')).sessions.some((s:any)=>s.responseProgress===3&&!s.blocked)).toBe(true)
   })
+  it('legacy cleared observations require a new session or explicit re-enable', async () => {
+    const f=await fixture(),id=await enable(f),file=join(f.state,'claude-session-observations.json')
+    await captureManagedClaude(payload(),id,f.state)
+    const legacy=JSON.parse(await readFile(file,'utf8'));delete legacy.sessions[0].responseProgress;await writeFile(file,JSON.stringify(legacy));await f.manager.clear()
+    expect((await readManagedClaude(f.state)).reason).toBe('missing-progress-boundary')
+    for(const progress of [200,300,400]) { await captureManagedClaude(payload('fixture-session-A',55,progress),id,f.state,Date.now()+1);expect(await readManagedClaude(f.state)).toMatchObject({reason:'missing-progress-boundary',windows:[]}) }
+    await captureManagedClaude(payload('fixture-session-B',65,1),id,f.state,Date.now()+2)
+    expect((await readManagedClaude(f.state)).windows[0].usedPercent).toBe(65)
+    const stop=await f.manager.preview('disable');await f.manager.confirm(stop.id,true);const renewed=await enable(f)
+    await captureManagedClaude(payload('fixture-session-A',70,500),renewed,f.state)
+    expect((await readManagedClaude(f.state)).windows[0].usedPercent).toBe(70)
+  })
   it('missing session, missing windows and changed managed command have explicit reasons', async () => {
     const f=await fixture(),id=await enable(f),now=Date.now()
     await captureManagedClaude({rate_limits:payload().rate_limits},id,f.state,now,'100');expect((await readManagedClaude(f.state)).reason).toBe('missing-session')

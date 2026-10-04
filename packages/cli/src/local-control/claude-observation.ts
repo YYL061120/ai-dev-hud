@@ -58,12 +58,13 @@ export async function readManagedClaude(directory = AIUSAGE_DIR, now = Date.now(
   const store = await readStore(directory)
   if (!store || store.installation !== installation.id) return unknown('waiting-response')
   if ((store.overflowUntil ?? 0) > now) return unknown('multiple-sessions')
+  if (store.reason === 'cleared' && store.sessions.some(session => session.blocked && session.responseProgress == null)) return unknown('missing-progress-boundary')
   if (store.reason && store.reason !== 'multiple-sessions') return unknown(store.reason)
   const recent = store.sessions.filter(session => !session.blocked && (session.lastSeenAt ?? session.observedAt) + 30_000 > now)
   if (recent.length > 1) return unknown('multiple-sessions')
   const active = store.sessions.filter(session => !session.blocked && (session.validUntil ?? 0) > now)
   if (active.length > 1) return unknown('multiple-sessions')
-  if (!active.length) return unknown(store.sessions.some(session => session.blocked) ? 'cleared' : 'expired')
+  if (!active.length) return unknown(store.sessions.some(session => session.blocked && session.responseProgress == null) ? 'missing-progress-boundary' : store.sessions.some(session => session.blocked) ? 'cleared' : 'expired')
   const session = active[0]
   if (!session.windows.length) return unknown('missing-windows')
   // Re-project; opaque bookkeeping hashes and original settings never enter the domain API.

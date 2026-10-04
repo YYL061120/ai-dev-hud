@@ -1,5 +1,7 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+最新修复：[CLAUDE_CLEAR_FIX.md](CLAUDE_CLEAR_FIX.md)。清除以每会话响应进度边界阻断较早输入；Web/HUD 管理操作同步撤销 Claude，tokens 保留，进行中的旧读取不能回填。build 通过，1174 passed / 1 既有 skip / 0 failed；生产 Web 三组、隔离 Electron 三组及原生双屏回归通过，实际用户 Claude 未启用。
+
 最新接续：[CLAUDE_SESSION_HANDOFF.md](CLAUDE_SESSION_HANDOFF.md)。用户真实 Claude 配置未改；UI 明确启用后保留原渲染，展示短时当前会话观测而不证明账号。预览、取消、确认、停用恢复、清除、外部冲突安全暂停均有隔离生产 E2E。build 通过，1173 passed / 1 既有 skip；固定 SHA、显示器枚举及正式进程恢复证据仅在本机。完成此轮后等待下一项明确授权。
 
 优先修复：[QUOTA_CLOSE_FAILURE_FIX.md](QUOTA_CLOSE_FAILURE_FIX.md)，解决 proxy 提前 resolve 和 Web/HUD 刷新失败保留旧额度。与 Claude 新功能分开提交；固定源码脚本覆盖双传输同批事件、异常关闭和发布时点，六组生产 401/503/断网即时失效通过。

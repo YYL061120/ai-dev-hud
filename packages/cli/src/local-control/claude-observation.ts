@@ -9,7 +9,7 @@ import { managedClaudeActive, readClaudeInstallation, originalStatuslineShell } 
 import { withFileMutex } from './file-mutex.js'
 const file = (directory: string) => join(directory, 'claude-session-observations.json')
 const digest = (value: string) => createHash('sha256').update(value).digest('hex')
-interface SessionObservation extends ToolSubscription { key: string; fingerprint: string; order: string; lastSeenAt: number; blocked?: boolean }
+interface SessionObservation extends ToolSubscription { key: string; fingerprint: string; order: string; lastSeenAt: number; responseProgress?: number | null; blocked?: boolean }
 interface Store { installation: string; sessions: SessionObservation[]; blockedResponses?: Array<{ key: string; fingerprint: string }>; invalidAt?: number; overflowUntil?: number; reason?: ClaudeObservationReason }
 async function readStore(directory: string): Promise<Store | undefined> {
   try {
@@ -32,13 +32,17 @@ export async function captureManagedClaude(value: unknown, installation: string,
       stored = { ...stored, invalidAt: observedAt, reason: 'missing-session', sessions: stored.sessions.map(session => ({ ...session, blocked: true })) }
     } else {
       const key = digest(payload.session_id), previous = stored.sessions.find(session => session.key === key)
-      const duration = typeof payload.cost?.total_api_duration_ms === 'number' && Number.isFinite(payload.cost.total_api_duration_ms) ? payload.cost.total_api_duration_ms : null
+      const duration = typeof payload.cost?.total_api_duration_ms === 'number' && Number.isFinite(payload.cost.total_api_duration_ms) && payload.cost.total_api_duration_ms >= 0 ? payload.cost.total_api_duration_ms : null
+      // A cumulative numeric response counter is metadata, never the input payload.
+      // Cleared sessions require strictly newer progress; absent progress cannot prove it.
+      if (previous?.blocked && (duration === null || previous.responseProgress == null || duration <= previous.responseProgress)) return
+      if (duration !== null && previous?.responseProgress != null && duration < previous.responseProgress) return
       const fingerprint = digest(JSON.stringify([snapshot.windows, duration]))
       if (stored.blockedResponses?.some(item => item.key === key && item.fingerprint === fingerprint)) return
       if (previous && ((previous.lastSeenAt ?? previous.observedAt) > observedAt || (previous.lastSeenAt ?? previous.observedAt) === observedAt && snapshot.windows.length && (!previous.windows.length || BigInt(previous.order) >= BigInt(order)))) return
-      stored.sessions = stored.sessions.filter(item => item.key === key || (item.lastSeenAt ?? item.observedAt) > observedAt - 30_000)
+      stored.sessions = stored.sessions.filter(item => item.blocked || item.key === key || (item.lastSeenAt ?? item.observedAt) > observedAt - 30_000)
       if (previous?.fingerprint !== fingerprint || !snapshot.windows.length) {
-        const session: SessionObservation = { ...snapshot, scope: 'session-observed', key, fingerprint, order, lastSeenAt: observedAt, generation: randomUUID(), validUntil: Math.min(observedAt + 30_000, ...snapshot.windows.flatMap(window => window.resetsAt === null ? [] : [window.resetsAt])) }
+        const session: SessionObservation = { ...snapshot, scope: 'session-observed', key, fingerprint, responseProgress: duration ?? previous?.responseProgress ?? null, order, lastSeenAt: observedAt, generation: randomUUID(), validUntil: Math.min(observedAt + 30_000, ...snapshot.windows.flatMap(window => window.resetsAt === null ? [] : [window.resetsAt])) }
         if (!previous && stored.sessions.length === 16) { stored.reason = 'multiple-sessions'; stored.overflowUntil = observedAt + 30_000 }
         else { stored.sessions = [...stored.sessions.filter(item => item.key !== key), session]; stored.reason = undefined }
       } else if (previous) { previous.lastSeenAt = observedAt; previous.order = order }

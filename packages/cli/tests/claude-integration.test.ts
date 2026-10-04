@@ -81,6 +81,22 @@ describe('explicit local Claude statusline composition', () => {
     await captureManagedClaude(stable,otherId,single.state,Date.now()+1,'103');expect((await readManagedClaude(single.state)).windows).toEqual([])
     await captureManagedClaude(payload('fixture-session-A',42,3),otherId,single.state,Date.now()+2,'104');expect((await readManagedClaude(single.state)).windows[0].usedPercent).toBe(42)
   })
+  it('clear rejects earlier response history and missing progress, including after session expiry', async () => {
+    const f=await fixture(),id=await enable(f)
+    await captureManagedClaude(payload('fixture-session-A',35,1),id,f.state)
+    await captureManagedClaude(payload('fixture-session-A',50,2),id,f.state)
+    await f.manager.clear()
+    await captureManagedClaude(payload('fixture-session-A',35,1),id,f.state,Date.now()+1)
+    expect((await readManagedClaude(f.state)).windows).toEqual([])
+    const missing={...payload('fixture-session-A',60,3),cost:{}}
+    await captureManagedClaude(missing,id,f.state,Date.now()+2)
+    expect((await readManagedClaude(f.state)).windows).toEqual([])
+    await captureManagedClaude(payload('fixture-session-B',25,1),id,f.state,Date.now()+31001)
+    await captureManagedClaude(payload('fixture-session-A',35,1),id,f.state,Date.now()+31002)
+    expect(JSON.parse(await readFile(join(f.state,'claude-session-observations.json'),'utf8')).sessions.find((s:any)=>s.blocked)?.responseProgress).toBe(2)
+    await captureManagedClaude(payload('fixture-session-A',65,3),id,f.state,Date.now()+31003)
+    expect(JSON.parse(await readFile(join(f.state,'claude-session-observations.json'),'utf8')).sessions.some((s:any)=>s.responseProgress===3&&!s.blocked)).toBe(true)
+  })
   it('missing session, missing windows and changed managed command have explicit reasons', async () => {
     const f=await fixture(),id=await enable(f),now=Date.now()
     await captureManagedClaude({rate_limits:payload().rate_limits},id,f.state,now,'100');expect((await readManagedClaude(f.state)).reason).toBe('missing-session')

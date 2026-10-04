@@ -57,6 +57,6 @@ export function buildUsageRings(records: UsageMetadataRecord[], currentDeviceKey
   return { version: 1, period, since, until, generatedAt: now.getTime(), currentDeviceKey, metric: 'observed-device-token-share', total, devices, syncConfigured: false }
 }
 /** Invalidate quota authorization immediately while preserving collected usage. */
-export function invalidateSubscriptionSnapshot(snapshot: UsageRingsSnapshot): UsageRingsSnapshot {
-  return { ...snapshot, subscriptions: [], subscriptionGenerations: {} }
+export function invalidateSubscriptionSnapshot(snapshot: UsageRingsSnapshot, tool?: string): UsageRingsSnapshot {
+  return { ...snapshot, subscriptions: tool ? snapshot.subscriptions?.filter(item => item.tool !== tool) : [], subscriptionGenerations: tool ? { ...snapshot.subscriptionGenerations, [tool]: null } : {} }
 }

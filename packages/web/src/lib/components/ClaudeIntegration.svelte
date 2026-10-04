@@ -2,12 +2,13 @@
   import { claudeStatuslineApi } from '../local-control'
   import type { ClaudeStatuslineStatus, ClaudeStatuslinePreview } from '../../../../core/src/claude-integration.js'
   export let language = 'zh'
+  export let onQuotaChange: () => Promise<void> = async () => {}
   const words = (zh: string, en: string) => language === 'zh' ? zh : en
   let status: ClaudeStatuslineStatus | undefined, preview: ClaudeStatuslinePreview | undefined, busy = false, error = '', message = ''
   async function operation(work: () => Promise<void>) { if (busy) return; busy = true; error = ''; try { await work() } catch (e) { error = e instanceof Error ? e.message : words('本地操作失败，原设置保留。', 'Local operation failed; existing settings were preserved.') } finally { busy = false } }
   async function load() { status = await claudeStatuslineApi.status() }
   function toggle(event: Event) { if ((event.currentTarget as HTMLDetailsElement).open) void operation(load) }
-  async function confirm() { if (!preview) return; status = await claudeStatuslineApi.confirm(preview.id); preview = undefined; message = words('配置已更新。等待 Claude 正常响应，或查看 /usage。', 'Settings updated. Wait for a normal Claude response, or check /usage.') }
+  async function confirm() { if (!preview) return; status = await claudeStatuslineApi.confirm(preview.id); preview = undefined; await onQuotaChange(); message = words('配置已更新。等待 Claude 正常响应，或查看 /usage。', 'Settings updated. Wait for a normal Claude response, or check /usage.') }
 </script>
 <details id="claude-integration" class="card" on:toggle={toggle}>
   <summary>{words('Claude 本地额度接入', 'Claude local quota connection')}</summary>
@@ -21,8 +22,8 @@
     {#if !preview}
       <button data-testid="claude-preview-enable" disabled={busy || status.enabled || status.conflict || status.managedConfigured} on:click={() => operation(async () => { preview = await claudeStatuslineApi.preview('enable') })}>{words('预览启用', 'Preview enable')}</button>
       {#if status.canRestore}<button data-testid="claude-preview-disable" disabled={busy} on:click={() => operation(async () => { preview = await claudeStatuslineApi.preview('disable') })}>{words('预览停用并恢复', 'Preview disable and restore')}</button>{/if}
-      {#if status.enabled}<button data-testid="claude-clear" disabled={busy} on:click={() => operation(async () => { await claudeStatuslineApi.clear(); message = words('已清除观测；已知旧输入不会续期，等待新的正常响应。', 'Observation cleared; known old input cannot extend it. Wait for a new normal response.') })}>{words('切号后清除观测', 'Clear after switching account')}</button>{/if}
-      {#if (status.enabled || status.conflict) && !status.canRestore}<button data-testid="claude-pause" disabled={busy} on:click={() => operation(async () => { status = await claudeStatuslineApi.pause(); message = words('采集已停止，现有 Claude 设置未更改；可手动恢复备份 original 字段。', 'Capture stopped without changing Claude settings; restore the backup original field manually if needed.') })}>{words('停止采集，保留外部设置', 'Stop capture; keep external settings')}</button>{/if}
+      {#if status.enabled}<button data-testid="claude-clear" disabled={busy} on:click={() => operation(async () => { await claudeStatuslineApi.clear(); await onQuotaChange(); message = words('已清除观测；已知旧输入不会续期，等待新的正常响应。', 'Observation cleared; known old input cannot extend it. Wait for a new normal response.') })}>{words('切号后清除观测', 'Clear after switching account')}</button>{/if}
+      {#if (status.enabled || status.conflict) && !status.canRestore}<button data-testid="claude-pause" disabled={busy} on:click={() => operation(async () => { status = await claudeStatuslineApi.pause(); await onQuotaChange(); message = words('采集已停止，现有 Claude 设置未更改；可手动恢复备份 original 字段。', 'Capture stopped without changing Claude settings; restore the backup original field manually if needed.') })}>{words('停止采集，保留外部设置', 'Stop capture; keep external settings')}</button>{/if}
     {/if}
   {/if}
   {#if status?.managedConfigured && !status.enabled}<p>{words('采集已停止，组合脚本仍保留原输出。恢复原命令后才能重新启用。备份：~/.aiusage/claude-statusline-installation.json 的 original 字段。', 'Capture is stopped; the wrapper still preserves original output. Restore the original command before enabling again. Backup: the original field in ~/.aiusage/claude-statusline-installation.json.')}</p>{/if}

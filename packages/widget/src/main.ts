@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog, screen, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { observeClaudeInvalidation } from './claude-invalidation'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 import { EXCHANGE_RATE_SOURCE } from './currency'
@@ -50,6 +51,15 @@ let dashboardLaunchPromise: Promise<{ success: boolean; error?: string }> | null
 let hudAuthenticationPort: number | null = null
 let hudRings: Awaited<ReturnType<typeof fetchUsageRings>> | undefined
 let hudRingsError: string | undefined
+let claudeQuotaEpoch = 0
+function invalidateSubscriptionSnapshot(snapshot: NonNullable<Awaited<ReturnType<typeof fetchUsageRings>>['today']>, tool: string) {
+  return { ...snapshot, subscriptions: snapshot.subscriptions?.filter(item => item.tool !== tool), subscriptionGenerations: { ...snapshot.subscriptionGenerations, [tool]: null } }
+}
+let stopClaudeInvalidation: (() => void) | undefined
+async function readHudRings() {
+  const epoch = claudeQuotaEpoch, rings = await fetchUsageRings(getDashboardPort())
+  return epoch === claudeQuotaEpoch ? rings : Object.fromEntries(Object.entries(rings).map(([key, snapshot]) => [key, invalidateSubscriptionSnapshot(snapshot, "claude-code")])) as typeof rings
+}
 const HUD_AUTH_MESSAGE = 'Dashboard 需要登录。HUD 自动解析已暂停；请打开仪表盘使用现有登录页。'
 
 let tray: Tray | null = null
@@ -361,11 +371,17 @@ function pushDataUpdate(): void {
 }
 
 function startAutoRefresh(): void {
+  if (HUD_MODE && !stopClaudeInvalidation) stopClaudeInvalidation = observeClaudeInvalidation(join(homedir(), ".aiusage", "claude-quota-invalidation.json"), () => {
+    claudeQuotaEpoch++
+    if (hudRings) hudRings = Object.fromEntries(Object.entries(hudRings).map(([key, snapshot]) => [key, invalidateSubscriptionSnapshot(snapshot, "claude-code")])) as typeof hudRings
+    win?.webContents.send("hud:data-update", getHudData())
+    void readHudRings().then(rings => { hudRings = rings; win?.webContents.send("hud:data-update", getHudData()) }).catch(() => {})
+  })
   if (refreshTimer) clearInterval(refreshTimer)
   if (quotaRefreshTimer) clearInterval(quotaRefreshTimer)
   if (HUD_MODE) quotaRefreshTimer = setInterval(() => {
     if (hudRefreshPromise || hudAuthenticationPort !== null) return
-    void fetchUsageRings(getDashboardPort()).then(rings => { hudRings = rings; win?.webContents.send('hud:data-update', getHudData()) }).catch(() => { hudRings = undefined; win?.webContents.send('hud:data-update', getHudData()) })
+    void readHudRings().then(rings => { hudRings = rings; win?.webContents.send('hud:data-update', getHudData()) }).catch(() => { hudRings = undefined; win?.webContents.send('hud:data-update', getHudData()) })
   }, 15_000)
   refreshTimer = setInterval(() => {
     if (HUD_MODE) void refreshHudData()
@@ -393,7 +409,7 @@ async function refreshHudData(force = false) {
       // CLI ingestion and its serialized write queue own the logs and DB.
       // This HUD cadence also works without a configured CLI refreshInterval.
       await refreshDashboard(getDashboardPort())
-      try { hudRings = await fetchUsageRings(getDashboardPort()); hudRingsError = undefined }
+      try { hudRings = await readHudRings(); hudRingsError = undefined }
       catch (error) { hudRings = undefined; hudRingsError = error instanceof Error ? error.message : '设备用量暂不可用' }
       const data = getHudData()
       win?.webContents.send('hud:data-update', data)

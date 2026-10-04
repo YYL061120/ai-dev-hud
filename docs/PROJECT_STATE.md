@@ -1,5 +1,7 @@
 # 项目状态
 
+最新修复：[CLAUDE_CLEAR_FIX.md](CLAUDE_CLEAR_FIX.md)。清除以每会话响应进度边界阻断较早输入；Web/HUD 管理操作同步撤销 Claude，tokens 保留，进行中的旧读取不能回填。build 通过，1174 passed / 1 既有 skip / 0 failed；生产 Web 三组、隔离 Electron 三组及原生双屏回归通过，实际用户 Claude 未启用。
+
 2026-10-04 当前交付：[CLAUDE_SESSION_HANDOFF.md](CLAUDE_SESSION_HANDOFF.md)。Claude 明确启用的原 statusline 组合、当前会话 30 秒观测、未知原因、清除与冲突暂停已完成；没有替用户启用，真实订阅百分比待用户正常响应验证。全量 build exit 0；tests 1173 passed / 1 既有 skip / 0 failed，133 files。关闭与刷新失败修复独立提交 ecc3fa8。以下历史“Claude 永远未知”结论已由此阶段更新。
 
 2026-10-04 优先修复记录：[QUOTA_CLOSE_FAILURE_FIX.md](QUOTA_CLOSE_FAILURE_FIX.md)。proxy/stdin 全部等待正常关闭后发布；刷新 401/503/断网立即清额度与代际、保留历史用量。六组生产失败回归通过，工作区全量 build 成功，1165 passed / 1 既有 skip。Claude 接入代码独立开发，不混入此修复提交。

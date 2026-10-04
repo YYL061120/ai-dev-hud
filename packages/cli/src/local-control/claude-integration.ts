@@ -96,6 +96,7 @@ export class ClaudeStatuslineManager {
         await atomic(installationPath(this.directory), JSON.stringify({ ...state, enabled: false }))
       }
     })
+    await atomic(join(this.directory, 'claude-quota-invalidation.json'), JSON.stringify({ generation: randomUUID() }))
     return this.status()
   }
   async clear(): Promise<void> {
@@ -105,12 +106,14 @@ export class ClaudeStatuslineManager {
       const responses = [...(stored.blockedResponses || []), ...(stored.sessions || []).map((session: any) => ({ key: session.key, fingerprint: session.fingerprint }))]
       const unique = new Map(responses.map((item: any) => [`${item.key}:${item.fingerprint}`, item]))
       await atomic(file, JSON.stringify({ ...stored, invalidAt: Date.now(), overflowUntil: undefined, reason: 'cleared', blockedResponses: [...unique.values()].slice(-64), sessions: (stored.sessions || []).map((session: any) => ({ ...session, blocked: true })) }))
+      await atomic(join(this.directory, 'claude-quota-invalidation.json'), JSON.stringify({ generation: randomUUID() }))
     })
   }
   async pause(): Promise<ClaudeStatuslineStatus> {
     await withFileMutex(this.directory, 'claude-integration-lock.sqlite', async () => {
       const state = await readClaudeInstallation(this.directory)
       if (state) await atomic(installationPath(this.directory), JSON.stringify({ ...state, enabled: false }))
+      await atomic(join(this.directory, 'claude-quota-invalidation.json'), JSON.stringify({ generation: randomUUID() }))
     })
     return this.status()
   }

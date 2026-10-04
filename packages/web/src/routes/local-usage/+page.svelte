@@ -19,9 +19,17 @@
   const money = (value: number, language: string) => value.toLocaleString(getLocale(language), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 })
   const estimate = (value: UsageTotals, language: string) => value.estimatedCost === null || value.estimatedCost === undefined ? (language === 'zh' ? '金额未知' : 'Cost unknown') : money(value.estimatedCost, language) + (value.missingEstimates ? (language === 'zh' ? ' · 部分估算' : ' · partial estimate') : '')
   async function operation(work: () => Promise<void>) { if (busy) return; busy = true; error = ''; try { await work() } catch (e) { error = e instanceof Error ? e.message : $t('control.error') } finally { busy = false } }
+  let quotaEpoch = 0
+  function invalidateClaude() {
+    if (data) data = { ...data, ...(data.rings ? { rings: invalidateSubscriptionSnapshot(data.rings, "claude-code") } : {}), ...(data.ringPeriods ? { ringPeriods: Object.fromEntries(Object.entries(data.ringPeriods).map(([key, value]) => [key, invalidateSubscriptionSnapshot(value, "claude-code")])) as UsageOverview["ringPeriods"] } : {}) }
+  }
+  async function claudeQuotaChanged() { quotaEpoch++; invalidateClaude(); await refresh() }
   async function refresh() {
+    const epoch = quotaEpoch
     try {
-      data = await usageApi.overview(period, device, project)
+      const next = await usageApi.overview(period, device, project)
+      data = next
+      if (epoch !== quotaEpoch) invalidateClaude()
       const all = await usageApi.overview('lifetime', '', '')
       devices = all.devices.map(r => r.key); projects = all.projects.map(r => r.key)
     } catch (e) {
@@ -83,7 +91,7 @@
 </script>
 <svelte:head><title>{$t('control.usage')} — AI Dev HUD</title></svelte:head>
 <div class="page-header"><h1>{$t('control.usage')}</h1><p>{$t('control.privacy')}</p></div>
-<ClaudeIntegration language={$lang} />
+<ClaudeIntegration language={$lang} onQuotaChange={claudeQuotaChanged} />
 {#if error}<p role="alert" class="error">{error}</p>{/if}
 <section class="card actions">
   <button data-testid="usage-export" disabled={busy} on:click={startExport}>{$t('control.export')}</button>

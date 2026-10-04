@@ -42,6 +42,18 @@ describe('curated prices', () => {
     expect(resolvePriceFromRegistry(db, 'gpt-6-luna')).toEqual({ input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125, currency: 'USD' })
   })
 
+  it('prices the observed older GPT models exactly and preserves unverified labels as unknown', () => {
+    expect(resolvePriceFromRegistry(db, 'gpt-6-astra')).toEqual({ input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, currency: 'USD' })
+    expect(resolvePriceFromRegistry(db, 'gpt-5.6-sol')).toEqual({ input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5, currency: 'USD' })
+    expect(resolvePriceFromRegistry(db, 'gpt-5.6-terra')).toEqual({ input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5, currency: 'USD' })
+    for (const model of ['gpt-6-astra-unpublished', 'gpt-5.6-sol-20990101', 'gpt-5.6-terra-unknown', 'codex-auto-review', 'cursor-composer']) {
+      expect(resolvePriceFromRegistry(db, model)).toBeUndefined()
+    }
+    setUserPrice(db, 'gpt-5.6-sol', { input: 1, output: 2 })
+    ensureCuratedPrices(db)
+    expect(resolvePriceFromRegistry(db, 'gpt-5.6-sol')).toMatchObject({ input: 1, output: 2 })
+  })
+
   it('stops a stale registry from pricing Opus 5.5 as Opus 5 by prefix', () => {
     // A registry synced before Opus 5.5 launched: Opus 5 is there, Opus 5.5 is not.
     db.prepare("DELETE FROM model_prices WHERE model_key = 'claude-opus-5-5'").run()

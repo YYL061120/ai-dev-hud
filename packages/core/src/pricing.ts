@@ -98,6 +98,10 @@ const OPENAI_PRICING_URL = 'https://developers.openai.com/api/docs/pricing'
 export const CURATED_PRICES: ReadonlyArray<CuratedPrice> = [
   // Verified 2026-10-04: standard, short-context rates; never an alias for other GPT models.
   { modelKey: 'gpt-6.1-sol', provider: 'openai', price: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, currency: 'USD' }, sourceUrl: 'https://developers.openai.com/api/docs/models/gpt-6.1-sol' },
+  { modelKey: 'gpt-6-astra', provider: 'openai', price: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, currency: 'USD' }, sourceUrl: 'https://developers.openai.com/api/docs/models/gpt-6-astra' },
+  // Sol's published promotional rates are available at least through 2026-11-21.
+  { modelKey: 'gpt-5.6-sol', provider: 'openai', price: { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5, currency: 'USD' }, sourceUrl: 'https://developers.openai.com/api/docs/models/gpt-5.6-sol' },
+  { modelKey: 'gpt-5.6-terra', provider: 'openai', price: { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5, currency: 'USD' }, sourceUrl: 'https://developers.openai.com/api/docs/models/gpt-5.6-terra' },
   {
     modelKey: 'claude-opus-5-5',
     provider: 'anthropic',

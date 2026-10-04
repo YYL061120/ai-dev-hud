@@ -1,5 +1,22 @@
 # 项目状态
 
+## 2026-10-04 真实未知金额追加修复
+
+Implemented: 本机 API 证实三个精确 GPT 模型缺少价格，已补官方标准短上下文价格；未知费用补充可读原因。正式页面及 API 均已验证三个模型费用恢复，未改用户 Claude 配置或 quota 安全语义。详见 [未知金额修复](UNKNOWN_MODEL_COST_FIX.md)。
+
+Not completed: Library 截图下载在 Windows 元数据写入时失败，目标未落地，未看图，不能确认截图所指项目；codex-auto-review / 未标版本 cursor-composer 无可核验价格，保留未知。Claude 仍 waiting-response；需要用户自己完成交互终端正常响应。未进行常驻 Electron 物理鼠标或 Mac 实机验收。
+
+Files changed: core pricing、CLI curated-prices 回归、共用 UsageToolDetails 未知原因、本文及 UNKNOWN_MODEL_COST_FIX。
+
+Tests: build 成功；1182 passed / 1 既有 skip / 0 failed，133 files。真实 API 全周期验收，正式 Web 7 天费用及原因渲染通过，0 page errors；隔离 HUD hover 四组通过。正式 API80816 / HUD14844 已恢复，Claude/widget 设置哈希不变；未上传私人截图或运行数据。
+
+Three highest-priority manual tests:
+1. HUD 和本地页切换 7 天/30 天/累计，核对已知模型金额及剩余未知说明。
+2. 用户自己在交互终端运行 claude 并完成响应，比较 HUD 与 /usage；不要重复启用。
+3. 物理鼠标验证右边缘唤起、连续移动和关闭穿透。
+
+---
+
 ## 2026-10-04 独立复核 P2 补修（当前最新）
 
 Implemented: 价格只匹配精确模型、明确登记的 alias/date 与用户显式价格/绑定；删除 core 和 CLI 价格管理视图的任意 startsWith 套价。gpt-6.1-sol-unpublished、gpt-6.1-sol-20990101 均保持未知；保留官方核验的历史 claude-sonnet-4-20250514 日期白名单，不生成其他日期。Codex cache_write_input_tokens 只描述为本地日志兼容字段，不宣称等同官方 API 或已验证官方 Codex 来源。

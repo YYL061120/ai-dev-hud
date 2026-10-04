@@ -39,6 +39,7 @@
           <div class="model"><span title={`${model.model} · ${model.provider}`}>{model.model}</span><b>{number(model.tokens)} <small>tokens</small></b><small title={words('用量金额估算', 'Estimated usage cost')}>{money(model.cost, model.missingEstimates)}</small></div>
         {:else}<p class="empty">{words('该统计时段无已采集用量', 'No collected usage in this period')}</p>{/each}
       </div>
+      {#if group.missingEstimates > 0}<p class="observation" data-testid="missing-cost-reason">{words('部分记录缺少可核验费用或精确模型价格，未知金额不计为零。可在本地价格设置中为已确认的模型配置价格。', 'Some records have no verified cost or exact model price; unknown amounts are not zero. Configure a price in local pricing settings only for an identified model.')}</p>{/if}
     </section>
   {/each}
   {#if !groups.length}<p class="empty">{words('该统计时段无已采集用量', 'No collected usage in this period')}</p>{/if}

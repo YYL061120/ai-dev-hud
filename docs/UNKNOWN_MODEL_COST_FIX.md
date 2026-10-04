@@ -10,6 +10,7 @@ Not completed:
 - `codex-auto-review` 无已核验公开价格；`cursor-composer` 未标具体版本，不能推定相应单价。保留未知。不能借一个模型的价格代替另一个标签。
 - Claude 正式 API 仍为 `waiting-response`、没有套餐窗口；此前用户启用配置保持原样。需要用户自己在交互终端运行 `claude` 并完成正常响应，才可能由官方 statusline 产生观测；未代发消息，也未重复启用。未验证真实 Claude 套餐捕获。
 - 未用物理鼠标目视验收常驻 Electron，未进行 Mac 实机测试。
+- 修复保存于本地提交 `746f61a`。自动审批拒绝向现有 GitHub remote 推送，理由是未确认对该具体外部目的地的源码/文档披露授权；未绕过限制。推送仍待明确目的地授权，本机正式修复已生效。
 
 Files changed:
 - `packages/core/src/pricing.ts`：三个精确官方价格。

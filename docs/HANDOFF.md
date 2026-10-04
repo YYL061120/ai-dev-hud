@@ -146,3 +146,19 @@ Three highest-priority manual tests:
 3. reduced-motion、键盘Tab/Escape、四周期/真实设备来源；中英网页窄屏、Dashboard以及大历史导入/导出保持可用。
 
 复跑：PATH加入C:\AI-Tools\.ai-dev-hud-tools\node_modules\.bin；使用pnpm.cmd。脚本指定AI_DEV_HUD_PLAYWRIGHT_PATH=C:\AI-Tools\.ai-dev-hud-tools\node_modules\playwright，以及AI_DEV_HUD_HOVER_EVIDENCE_DIR/AI_DEV_HUD_LAYOUT_EVIDENCE_DIR。node scripts/verify-hud-hover.cjs；node scripts/verify-hud-native-bounds.cjs；node scripts/verify-ring-layout.cjs。前两脚本只合成数据，后者隔离CLI。Computer Use恢复后才继续真实桌面验收，之后不开展新里程碑。
+## 2026-10-04 推送复核与下一阶段边界
+
+Implemented: 本地修复提交 `746f61a`、阻塞记录 `66e902e` 已保存，分支为 `feat/local-control-center`。用户反馈其他两台电脑已看到相同内容；此项为用户报告，未据此认定自动同步已实现。Cursor 明确保持现状。
+
+Not completed: 本轮仅按指定仓库授权重试一次正常推送，仍在命令执行前被自动审批拒绝。理由为具体 GitHub URL 授权来自委派转述，审批器不认为是可信用户直接授权；未绕过、未再次推送。下一步需可信用户消息直接授权向 `https://github.com/YYL061120/ai-dev-hud.git` 推送这两个提交。新同步阶段未开始改码，不启动云同步、daemon 或自动设备合并。
+
+Files changed: 本轮仅交接及 PROJECT_STATE 文档；价格/UI 修复文件见 [UNKNOWN_MODEL_COST_FIX.md](UNKNOWN_MODEL_COST_FIX.md)。
+
+Tests: 本轮没有修改代码，未重复全量测试；此前本机 build 成功，1182 passed / 1 既有 skip / 0 failed、真实 API/Web 及四组 HUD hover 验收通过。父任务报告另外完成定向 27 tests 和 SSR 复核，无 P1/P2；该项为委派证据，本代理未重跑。
+
+Three highest-priority manual tests:
+1. 获取直接目的地授权后正常推送，核对远端 SHA 与本地 HEAD。
+2. 下一阶段先核对两台设备如何看到相同内容、各自 device ID 及本地/导入来源，不能把用户报告当作同步实现验收。
+3. 继续保留 Cursor 现状，复核 HUD 动画、主屏偏好及 Claude 当前观测状态。
+
+---

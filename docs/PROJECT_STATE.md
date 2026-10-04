@@ -2,6 +2,8 @@
 
 ## 2026-10-04 真实未知金额追加修复
 
+后续交接：指定 GitHub 仓库的一次正常 push 重试仍被自动审批阻止，未执行上传，未绕过。详细理由和新同步阶段边界见 [HANDOFF.md](HANDOFF.md)。用户报告其他两台电脑已看到相同内容；这不是本机实测自动同步证据。Cursor 保持现状，本轮不开始同步改码。代码提交仍为 `746f61a` / `66e902e`，本轮仅更新交接文档。
+
 Implemented: 本机 API 证实三个精确 GPT 模型缺少价格，已补官方标准短上下文价格；未知费用补充可读原因。正式页面及 API 均已验证三个模型费用恢复，未改用户 Claude 配置或 quota 安全语义。详见 [未知金额修复](UNKNOWN_MODEL_COST_FIX.md)。
 
 Not completed: Library 截图下载在 Windows 元数据写入时失败，目标未落地，未看图，不能确认截图所指项目；codex-auto-review / 未标版本 cursor-composer 无可核验价格，保留未知。Claude 仍 waiting-response；需要用户自己完成交互终端正常响应。未进行常驻 Electron 物理鼠标或 Mac 实机验收。

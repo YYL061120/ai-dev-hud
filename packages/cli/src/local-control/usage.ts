@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
-import { aggregateUsage, safeUsageIdentifier, TRANSFER_RECORD_LIMIT, USAGE_METADATA_FIELDS, USAGE_CHUNK_RECORDS, validateUsageTransfer, type UsageMetadataRecord, type UsageMetadataTransfer, type MetadataImportResult } from '@aiusage/core'
+import { aggregateUsage, safeUsageIdentifier, calculateCostForPrice, codexBillingTokens, resolveExchangeRate, TRANSFER_RECORD_LIMIT, USAGE_METADATA_FIELDS, USAGE_CHUNK_RECORDS, validateUsageTransfer, type PriceEntry, type UsageMetadataRecord, type UsageMetadataTransfer, type MetadataImportResult } from '@aiusage/core'
+import { resolvePriceFromRegistry } from '../pricing-registry.js'
+import { loadConfig } from '../config.js'
 import { LOCAL_RECORDS_WHERE } from '../db/records.js'
 import { LocalControlError } from './projects.js'
 import { buildUsageRings, type DeviceUsageOrigin, type UsagePeriod } from '@aiusage/core'
@@ -11,10 +13,10 @@ const identityCaches = new WeakMap<Database.Database, { currentId: string; chang
 const changes = (db: Database.Database) => (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n
 const version = (db: Database.Database) => db.pragma('data_version', { simple: true }) as number
 const projectPathKey = (value: string) => /^[a-z]:|\\/.test(value.toLowerCase()) ? value.replaceAll('\\', '/').toLowerCase().replace(/\/+$/, '') : value.replace(/\/+$/, '')
-function localRow(row: any, currentId: string): UsageMetadataRecord {
+function localRow(row: any, currentId: string, pricing?: (model: string) => PriceEntry | undefined, exchangeRate?: number): UsageMetadataRecord {
   const deviceId = !row.device_instance_id || row.device_instance_id === 'unknown' ? currentId : row.device_instance_id
   const deviceKey = deviceKeyFor(deviceId)
-  return {
+  const record: UsageMetadataRecord = {
     deviceKey, recordKey: hash('record', `${deviceKey}\0${row.id}`), projectKey: row.cwd ? hash('project', `${deviceKey}\0${projectPathKey(row.cwd)}`) : null,
     sessionKey: row.session_id ? hash('session', `${deviceKey}\0${row.tool}\0${row.session_id}`) : null,
     ts: row.ts, updatedAt: row.updated_at, tool: row.tool, model: safeUsageIdentifier(row.model), provider: safeUsageIdentifier(row.provider, 'provider'),
@@ -22,6 +24,14 @@ function localRow(row: any, currentId: string): UsageMetadataRecord {
     cacheReadTokens: row.cache_read_tokens, cacheWriteTokens: row.cache_write_tokens, thinkingTokens: row.thinking_tokens, cost: row.cost,
     costSource: ['log', 'pricing', 'unknown'].includes(row.cost_source) ? row.cost_source : 'unknown',
   }
+  // Historical Codex rows may predate pricing support and incorrectly label $0
+  // as priced. Re-project locally without rewriting the private DB or imports.
+  if (record.tool === 'codex' && record.costSource !== 'log' && pricing) {
+    const price = pricing(record.model)
+    record.cost = price ? calculateCostForPrice(price, codexBillingTokens(record), exchangeRate) : 0
+    record.costSource = price ? 'pricing' : 'unknown'
+  }
+  return record
 }
 export class UsageMetadataStore {
   constructor(private db: Database.Database, private currentId: string) {}
@@ -30,7 +40,13 @@ export class UsageMetadataStore {
   private localRecords(): UsageMetadataRecord[] {
     // Explicit projection: no raw content, source_file, hostnames, or tool-call arguments are read.
     const rows = this.db.prepare(`SELECT id, ts, updated_at, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source, session_id, cwd, device_instance_id, platform FROM records WHERE ${LOCAL_RECORDS_WHERE}`).all()
-    return rows.map(row => localRow(row, this.currentId))
+    const project = this.localProjector()
+    return rows.map(project)
+  }
+  private localProjector() {
+    const prices = new Map<string, PriceEntry | undefined>(), exchangeRate = resolveExchangeRate(loadConfig() ?? {})
+    const pricing = (model: string) => { if (!prices.has(model)) prices.set(model, resolvePriceFromRegistry(this.db, model)); return prices.get(model) }
+    return (row: any) => localRow(row, this.currentId, pricing, exchangeRate)
   }
   private records(origins?: Map<string, DeviceUsageOrigin>): UsageMetadataRecord[] {
     const local = this.localRecords(); const keyed = new Map(local.map(r => [`${r.deviceKey}:${r.recordKey}`, r]))

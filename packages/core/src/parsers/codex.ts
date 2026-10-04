@@ -2,7 +2,7 @@ import type { Parser, ParseResult, ParseContext } from '../types.js'
 import type { StatsRecord, ToolCallRecord, Tool } from '../types.js'
 import { generateRecordId, generateToolCallId, generateOrphanToolCallId } from '../record-id.js'
 import { inferProvider } from '../provider.js'
-import { calculateCost } from '../pricing.js'
+import { calculateCost, codexBillingTokens, resolvePrice } from '../pricing.js'
 
 interface PendingToolCall {
   name: string
@@ -68,17 +68,18 @@ export class CodexParser implements Parser {
     const outputTokens = usage.output_tokens ?? 0
     const cacheReadTokens = usage.cached_input_tokens ?? 0
     const thinkingTokens = usage.reasoning_output_tokens ?? 0
-    const cacheWriteTokens = 0 // Codex doesn't provide this
+    const cacheWriteTokens = usage.cache_write_input_tokens ?? 0
 
-    const cost = model === 'unknown' ? 0 : calculateCost(model, {
+    const hasPrice = model !== 'unknown' && resolvePrice(model) !== undefined
+    const cost = !hasPrice ? 0 : calculateCost(model, codexBillingTokens({
       inputTokens,
       outputTokens,
       cacheReadTokens,
       cacheWriteTokens,
       thinkingTokens,
-    }, context.exchangeRate)
+    }), context.exchangeRate)
 
-    const costSource = model === 'unknown' ? 'unknown' as const : 'pricing' as const
+    const costSource = hasPrice ? 'pricing' as const : 'unknown' as const
     const provider = inferProvider(model)
 
     const recordId = generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset)

@@ -45,7 +45,7 @@ export function recalcPricing(db: Database.Database): RecalcResult {
         cacheReadTokens: record.cache_read_tokens,
         cacheWriteTokens: record.cache_write_tokens,
         thinkingTokens: record.thinking_tokens,
-      }, exchangeRate) : 0
+      }, exchangeRate, record.tool) : 0
       const costSource = price ? 'pricing' : 'unknown'
 
       if (model !== record.model || provider !== record.provider || newCost !== record.cost || costSource !== record.cost_source) {

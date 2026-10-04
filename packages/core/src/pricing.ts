@@ -96,6 +96,8 @@ const OPENAI_PRICING_URL = 'https://developers.openai.com/api/docs/pricing'
  * (short-context, global) tier; `cacheWrite` is the 5-minute write rate.
  */
 export const CURATED_PRICES: ReadonlyArray<CuratedPrice> = [
+  // Verified 2026-10-04: standard, short-context rates; never an alias for other GPT models.
+  { modelKey: 'gpt-6.1-sol', provider: 'openai', price: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, currency: 'USD' }, sourceUrl: 'https://developers.openai.com/api/docs/models/gpt-6.1-sol' },
   {
     modelKey: 'claude-opus-5-5',
     provider: 'anthropic',
@@ -175,6 +177,15 @@ function resolvePriceFromTable(model: string, table: Record<string, PriceEntry>)
   return bestEntry
 }
 
+/** Codex logs retain inclusive input/output counters; preserve them in storage.
+ * Cache input and reasoning output are subsets, unlike Anthropic's exclusive buckets.
+ * Only the billing adapter projects disjoint categories. */
+export function codexBillingTokens(tokens: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; thinkingTokens: number }) {
+  const cacheReadTokens = Math.min(tokens.inputTokens, tokens.cacheReadTokens)
+  const cacheWriteTokens = Math.min(Math.max(0, tokens.inputTokens - cacheReadTokens), tokens.cacheWriteTokens)
+  return { ...tokens, inputTokens: Math.max(0, tokens.inputTokens - cacheReadTokens - cacheWriteTokens), cacheReadTokens, cacheWriteTokens, thinkingTokens: 0 }
+}
+
 function calculateCostWithResolver(
   model: string,
   tokens: {
@@ -227,8 +238,10 @@ export function calculateCostForPrice(
     cacheWriteTokens: number
     thinkingTokens: number
   },
-  exchangeRate?: number
+  exchangeRate?: number,
+  tool?: string
 ): number {
+  if (tool === 'codex') tokens = codexBillingTokens(tokens)
   const inputCost = (tokens.inputTokens / 1_000_000) * price.input
   const outputCost = (tokens.outputTokens / 1_000_000) * price.output
   const cacheReadCost = (tokens.cacheReadTokens / 1_000_000) * (price.cacheRead ?? 0)

@@ -161,7 +161,7 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
           cacheReadTokens: r.cache_read_tokens,
           cacheWriteTokens: r.cache_write_tokens,
           thinkingTokens: r.thinking_tokens,
-        }, exchangeRate) : 0
+        }, exchangeRate, r.tool) : 0
         const costSource = price ? 'pricing' : 'unknown'
 
         if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue

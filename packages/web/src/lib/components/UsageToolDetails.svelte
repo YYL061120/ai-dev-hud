@@ -33,6 +33,7 @@
         {/each}
         {#if expanded}<small class="observation">{subscription.source} · {words('观测于 ', 'Observed ')}{new Date(subscription.observedAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}</small>{/if}
       {:else}<p class="quota unknown">{local ? group.tool === 'claude-code' ? observationReason(candidate?.reason) : words('账号套餐额度未知', 'Account quota unknown') : words('设备未提供账号额度', 'Account quota unavailable for this device')}</p>{#if local && group.tool === 'claude-code'}<p class="observation">{words('在本地用量页启用接入；或在 Claude Code 输入 /usage 查看官方用量。', 'Enable the connection on Local usage, or enter /usage in Claude Code for official usage.')}</p>{/if}{/if}
+      {#if group.tool === 'codex'}<p class="observation">{words('金额按已知模型的标准短上下文 API 价格估算；未识别价格列为未知，不代表套餐账单。缓存写入、长上下文和服务档位可能影响实际 API 费用。', 'Estimated at known model standard short-context API rates. Unpriced models remain unknown; this is not a subscription bill. Cache writes, long context and service tiers can affect actual API cost.')}</p>{/if}
       <div class="model-list">
         {#each group.models as model}
           <div class="model"><span title={`${model.model} · ${model.provider}`}>{model.model}</span><b>{number(model.tokens)} <small>tokens</small></b><small title={words('用量金额估算', 'Estimated usage cost')}>{money(model.cost, model.missingEstimates)}</small></div>

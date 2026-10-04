@@ -3,11 +3,26 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CodexParser } from '../src/parsers/codex.js'
 import type { ParseContext } from '../src/types.js'
+import { calculateCostForPrice, codexBillingTokens } from '../src/pricing.js'
 
 const fixturePath = join(__dirname, 'fixtures/codex/sample.jsonl')
 const lines = readFileSync(fixturePath, 'utf-8').split('\n').filter(Boolean)
 
 describe('CodexParser', () => {
+  it('bills inclusive cached input and reasoning output once, without changing stored counters', () => {
+    const tokens = { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 800, cacheWriteTokens: 0, thinkingTokens: 40 }
+    const projected = codexBillingTokens(tokens)
+    expect(projected).toEqual({ ...tokens, inputTokens: 200, thinkingTokens: 0 })
+    expect(tokens.inputTokens).toBe(1000)
+    expect(calculateCostForPrice({ input: 2, output: 10, cacheRead: .1 }, tokens, undefined, 'codex')).toBeCloseTo(.00148)
+    expect(calculateCostForPrice({ input: 2, output: 10, cacheRead: .1 }, tokens)).toBeCloseTo(.00348)
+    expect(calculateCostForPrice({ input: 2, output: 10, cacheRead: .1, cacheWrite: 2.5 }, { inputTokens: 10000, outputTokens: 1000, cacheReadTokens: 6000, cacheWriteTokens: 2000, thinkingTokens: 100 }, undefined, 'codex')).toBeCloseTo(.0196)
+  })
+  it('marks an unpriced model unknown instead of a priced zero', () => {
+    const parser = new CodexParser()
+    const result = parser.parseLine(JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', model: 'unpriced-model', last_token_usage: { input_tokens: 100, output_tokens: 10 } } }), { sourceFile: 'fixture', lineOffset: 0, sessionId: 'fixture', tool: 'codex', now: Date.now(), device: 'fixture', deviceInstanceId: 'fixture' })
+    expect(result!.record).toMatchObject({ cost: 0, costSource: 'unknown', inputTokens: 100, outputTokens: 10 })
+  })
   const baseContext: ParseContext = {
     sourceFile: fixturePath,
     lineOffset: 0,

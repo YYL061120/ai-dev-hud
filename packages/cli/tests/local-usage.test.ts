@@ -11,6 +11,19 @@ const fixture = (): StatsRecord => ({ id: 'PRIVATE_SOURCE_ID', ts: Date.now(), i
 beforeEach(() => { db = createDatabase(':memory:'); insertRecord(db, fixture()) })
 afterEach(() => { db.close(); vi.unstubAllEnvs() })
 describe('local metadata storage adapter', () => {
+  it('repairs historic today Codex priced zeros without changing the DB or imported prices', () => {
+    db.prepare('UPDATE records SET model=?, input_tokens=1000, output_tokens=100, cache_read_tokens=800, thinking_tokens=40, cost=0, cost_source=?').run('gpt-6.1-sol', 'pricing')
+    const store = new UsageMetadataStore(db, 'local-device-instance'), today = store.overview('today')
+    expect(today.rings.total.models[0]).toMatchObject({ tokens: 1940, missingEstimates: 0 })
+    expect(today.rings.total.models[0].cost).toBeCloseTo(.00148)
+    expect(today.selected.estimatedCost).toBeCloseTo(.00148)
+    expect(db.prepare('SELECT cost FROM records').get()).toEqual({ cost: 0 })
+    const foreign = store.export(); foreign.records[0].deviceKey = 'e'.repeat(64); foreign.records[0].recordKey = 'f'.repeat(64); foreign.records[0].cost = 123
+    store.import(foreign)
+    expect(store.overview('today').rings.devices.find(r => r.key === 'e'.repeat(64))!.models[0].cost).toBe(123)
+    db.prepare('UPDATE records SET model=?').run('codex-auto-review')
+    expect(store.overview('today').rings.devices.find(r => r.key === today.currentDeviceKey)!.models[0]).toMatchObject({ cost: null, missingEstimates: 1 })
+  })
   it('exposes consistent device rings, real import receipts and unknown historic receipt times without changing exports', () => {
     const store = new UsageMetadataStore(db, 'local-device-instance'), foreign = store.export()
     foreign.records[0].deviceKey = 'e'.repeat(64); foreign.records[0].recordKey = 'f'.repeat(64)

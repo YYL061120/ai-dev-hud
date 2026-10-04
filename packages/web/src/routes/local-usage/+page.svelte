@@ -6,8 +6,9 @@
   import type { UsageExportProgress } from '../../../../core/src/usage-transfer.js'
   import { importUsageFile, type FileImportProgress } from '$lib/usage-file'
   import { beginUsageExport } from '$lib/usage-export-lifecycle'
-  import { invalidateSubscriptionSnapshot } from '../../../../core/src/usage-rings.js'
   import UsageRings from '$lib/components/UsageRings.svelte'
+  import ClaudeIntegration from '$lib/components/ClaudeIntegration.svelte'
+  import { invalidateSubscriptionSnapshot } from '../../../../core/src/usage-rings.js'
   let data: UsageOverview | null = null
   let busy = false, error = '', period = 'thirty', device = '', project = ''
   let imported: FileImportProgress | null = null, exported: UsageExportProgress | null = null
@@ -82,6 +83,7 @@
 </script>
 <svelte:head><title>{$t('control.usage')} — AI Dev HUD</title></svelte:head>
 <div class="page-header"><h1>{$t('control.usage')}</h1><p>{$t('control.privacy')}</p></div>
+<ClaudeIntegration language={$lang} />
 {#if error}<p role="alert" class="error">{error}</p>{/if}
 <section class="card actions">
   <button data-testid="usage-export" disabled={busy} on:click={startExport}>{$t('control.export')}</button>
@@ -94,7 +96,7 @@
 {#if imported}<pre data-testid="import-result" role="status">{$t(`control.transfer-${imported.state}`)} · {number(imported.records, $lang)} {$t('control.confirmedRecords')} · {number(imported.chunks, $lang)} {$t('control.chunks')} · {$t('control.fileRead')} {Math.round(100 * imported.bytes / Math.max(1, imported.totalBytes))}%
 {JSON.stringify(imported.result, null, 2)}</pre>{#if imported.state === 'failed' || imported.state === 'cancelled'}<p class="hint">{$t('control.partialImport')}{#if imported.uncertain} {$t('control.uncertainImport')}{/if}</p>{/if}{/if}
 {#if data}
-{#if data.rings}<section class="rings-section"><UsageRings snapshot={data.rings} language={$lang}/><p class="hint">{$lang === 'zh' ? '同心环按工具表示官方账号共享套餐已用比例，虚线表示未知或过期。统计时段只筛选设备用量；其他设备可手动导入元数据，未接入不等于用量为零。' : 'Tool rings show official shared-account quota usage; dashed tracks mean unknown or stale. The period filters device usage only. Import other devices manually; unconnected does not mean zero usage.'}</p></section>{/if}
+{#if data.rings}<section class="rings-section"><UsageRings snapshot={data.rings} language={$lang}/><p class="hint">{$lang === 'zh' ? 'Codex 为短期核验的账号共享额度，Claude 为短期会话观测（账号未核验）；虚线表示未知或过期。统计时段只筛选设备用量，未接入设备不等于用量为零。' : 'Codex shows a briefly verified shared-account observation; Claude shows a brief session observation with account unverified. Dashed tracks mean unknown or stale. The period filters device usage; unconnected devices do not mean zero usage.'}</p></section>{/if}
 <div class="totals">{#each periods as p}<section class="card" data-testid={`usage-${p}`}><h2>{$t(`control.${p}`)}</h2><strong>{number(data.periods[p].tokens, $lang)}</strong><p>{$t('control.tokens')}</p><small>{estimate(data.periods[p], $lang)} · {number(data.periods[p].sessions, $lang)} {$t('control.sessionCount')} · {number(data.periods[p].records, $lang)} {$t('control.records')}</small></section>{/each}</div>
 <section class="card"><label for="usage-period">{$t('control.filter')}</label><div class="actions">
   <select id="usage-period" bind:value={period} disabled={busy} on:change={() => operation(refresh)}>{#each periods as p}<option value={p}>{$t(`control.${p}`)}</option>{/each}</select>

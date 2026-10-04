@@ -1,15 +1,16 @@
 import { safeUsageIdentifier } from './usage-metadata.js'
 
-/** Account-scoped official observations. Never a device allocation or a token budget. */
+/** Official window observations; scope is stated by the source. Never a device allocation or token budget. */
 export interface SubscriptionWindow {
   bucketId: string; bucketName: string | null; slot: string
   durationMinutes: number | null; usedPercent: number | null; resetsAt: number | null
 }
 export interface ToolSubscription {
-  /** Opaque login-generation proof supplied only by an authenticated integration, never device identity. */
+  /** Opaque observation generation; session-observed data never proves an account login. */
   generation?: string | null
   validUntil?: number
-  tool: string; scope: 'account-shared'; source: 'codex-app-server' | 'claude-statusline'
+  tool: string; scope: 'account-shared' | 'session-observed'; source: 'codex-app-server' | 'claude-statusline'
+  reason?: import('./claude-integration.js').ClaudeObservationReason
   observedAt: number; windows: SubscriptionWindow[]
 }
 export const SUBSCRIPTION_FRESHNESS_MS = 5 * 60_000

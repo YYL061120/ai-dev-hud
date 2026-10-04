@@ -9,7 +9,10 @@ const emit=(name,text)=>fs.writeFileSync(path.join(work,name),ts.transpileModule
 emit('types.js',source('packages/core/src/types.ts'))
 emit('usage-metadata.js',source('packages/core/src/usage-metadata.ts'))
 emit('subscription-usage.js',source('packages/core/src/subscription-usage.ts'))
-emit('subscriptions.js',source('packages/cli/src/local-control/subscriptions.ts').replace("from '@aiusage/core'","from './subscription-usage.js'").replace("from 'better-sqlite3'",`from '${pathToFileURL(require.resolve('../packages/cli/node_modules/better-sqlite3')).href}'`).replace(/import \{ AIUSAGE_DIR \} from '..\/config.js'/,"const AIUSAGE_DIR = ''").replace(/import \{ codexStatus \} from '.\/launcher.js'/,"const codexStatus = async () => { throw Error('Forbidden in fixture') }"))
+const sqlite=`from '${pathToFileURL(require.resolve('../packages/cli/node_modules/better-sqlite3')).href}'`,subscriptionSource=source('packages/cli/src/local-control/subscriptions.ts'),managed=subscriptionSource.includes('readManagedClaude')
+const adapt=text=>text.replace("from '@aiusage/core'","from './subscription-usage.js'").replace("from 'better-sqlite3'",sqlite).replace(/import \{ AIUSAGE_DIR \} from '..\/config.js'/,"const AIUSAGE_DIR = ''")
+emit('subscriptions.js',adapt(subscriptionSource).replace(/import \{ codexStatus \} from '.\/launcher.js'/,"const codexStatus = async () => { throw Error('Forbidden in fixture') }"))
+if(managed){emit('file-mutex.js',adapt(source('packages/cli/src/local-control/file-mutex.ts')));emit('claude-integration.js',adapt(source('packages/cli/src/local-control/claude-integration.ts')).replace(/import \{ LocalControlError \} from '.\/projects.js'/,"class LocalControlError extends Error { constructor(message, status = 400) { super(message); this.status = status } }"));emit('claude-observation.js',adapt(source('packages/cli/src/local-control/claude-observation.ts')))}
 fs.writeFileSync(path.join(work,'package.json'),'{"type":"module"}')
 fs.writeFileSync(path.join(work,'worker.mjs'),`import fsp from 'node:fs/promises';import {syncBuiltinESMExports} from 'node:module';
 const [directory,percent,delayed]=process.argv.slice(2);
@@ -56,6 +59,20 @@ async function run(){
  const dir=fs.mkdtempSync(path.join(work,'crash-')),holder=worker(dir,11,'hold');await message(holder,'ready');holder.send('release');await message(holder,'locked')
  const contender=worker(dir,72,false);let completed=false;contender.on('message',value=>{if(value==='done')completed=true});await new Promise(resolve=>setTimeout(resolve,250));assert.equal(completed,false,'An active lock must not be stolen');const exited=new Promise(resolve=>holder.once('exit',resolve));holder.kill();await exited;await message(contender,'done');assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'subscription-claude.json'))).windows[0].usedPercent,72)
  checks.push('live OS lock not stolen; killed owner releases lock and capture recovers')
+ if(managed){
+  const {ClaudeStatuslineManager,readClaudeInstallation}=await import(pathToFileURL(path.join(work,'claude-integration.js')).href),{captureManagedClaude,readManagedClaude}=await import(pathToFileURL(path.join(work,'claude-observation.js')).href),dir=fs.mkdtempSync(path.join(work,'Claude spaces ')),config=path.join(dir,'config spaces'),state=path.join(dir,'state spaces');fs.mkdirSync(config)
+  const initial={statusLine:{type:'command',command:'node fixture-original.cjs'},untouched:'PRIVATE_SETTINGS_FIXTURE'},settings=path.join(config,'settings.json');fs.writeFileSync(settings,JSON.stringify(initial));const manager=new ClaudeStatuslineManager(config,state,path.join(work,'fixture-cli.mjs'))
+  const preview=await manager.preview('enable');assert.deepEqual(JSON.parse(fs.readFileSync(settings)),initial);await assert.rejects(manager.confirm(preview.id,false));assert.deepEqual(JSON.parse(fs.readFileSync(settings)),initial);await manager.confirm(preview.id,true);const id=(await readClaudeInstallation(state)).id
+  const payload={session_id:'fixture-session-A',cost:{total_api_duration_ms:1},rate_limits:{seven_day:{used_percentage:35}},prompt:'PRIVATE_PROMPT_FIXTURE'},at=Date.now();await captureManagedClaude(payload,id,state,at,'100');const first=await readManagedClaude(state,at+1);assert.equal(first.scope,'session-observed');assert.equal(first.windows[0].usedPercent,35);assert(!/PRIVATE|session_id|key|fingerprint/.test(JSON.stringify(first)))
+  await captureManagedClaude(payload,id,state,Date.now(),'101');assert.equal((await readManagedClaude(state,at+10001)).validUntil,first.validUntil);assert.equal((await readManagedClaude(state,at+30001)).reason,'expired')
+  await manager.clear();await captureManagedClaude({...payload,cost:{total_api_duration_ms:2}},id,state,at-1,'102');assert.equal((await readManagedClaude(state)).reason,'cleared')
+  await captureManagedClaude(payload,id,state,Date.now()+1,'103');assert.equal((await readManagedClaude(state)).windows.length,0)
+  await captureManagedClaude({...payload,cost:{total_api_duration_ms:3}},id,state,Date.now()+2,'104');assert.equal((await readManagedClaude(state)).windows[0].usedPercent,35)
+  await captureManagedClaude({...payload,session_id:'fixture-session-B',cost:{total_api_duration_ms:4}},id,state,Date.now()+3,'105');assert.equal((await readManagedClaude(state)).reason,'multiple-sessions')
+  const disable=await manager.preview('disable');await manager.confirm(disable.id,true);assert.deepEqual(JSON.parse(fs.readFileSync(settings)),initial);assert.equal((await readManagedClaude(state)).reason,'disabled')
+  const again=await manager.preview('enable');await manager.confirm(again.id,true);const edited={...JSON.parse(fs.readFileSync(settings)),external:true};fs.writeFileSync(settings,JSON.stringify(edited));await assert.rejects(manager.preview('disable'));assert.deepEqual(JSON.parse(fs.readFileSync(settings)),edited)
+  checks.push('pinned Claude preview/refusal, session projection, unchanged response TTL, clear/late input, parallel sessions, restoration and external conflict')
+ }
  const result={commit,checks,passed:true,synthetic:true,work};console.log(JSON.stringify(result,null,2));if(process.env.AI_DEV_HUD_REVIEW_EVIDENCE)fs.writeFileSync(process.env.AI_DEV_HUD_REVIEW_EVIDENCE,JSON.stringify(result,null,2))
 }
 run().catch(error=>{console.error(error);process.exitCode=1})

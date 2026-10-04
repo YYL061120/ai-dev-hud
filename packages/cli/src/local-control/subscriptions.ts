@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { normalizeClaudeStatusline, normalizeCodexRateLimits, type ToolSubscription } from '@aiusage/core'
 import { AIUSAGE_DIR } from '../config.js'
 import { codexStatus } from './launcher.js'
+import { readManagedClaude } from './claude-observation.js'
 const exec = promisify(execFile)
 let cache: { until: number; value: ToolSubscription | undefined } | undefined
 let pending: Promise<ToolSubscription | undefined> | undefined
@@ -134,6 +135,6 @@ export async function readClaudeSubscription(directory = AIUSAGE_DIR): Promise<T
   } catch { return undefined }
 }
 export async function readSubscriptions(): Promise<ToolSubscription[]> {
-  const values = await Promise.all([readCodexSubscriptions(), readClaudeSubscription()])
-  return values.filter((value): value is ToolSubscription => !!value).map(value => value.tool === 'codex' && value.generation && (value.validUntil ?? 0) > Date.now() ? value : { ...value, windows: [] })
+  const values = await Promise.all([readCodexSubscriptions(), readManagedClaude()])
+  return values.filter((value): value is ToolSubscription => !!value).map(value => value.generation && (value.validUntil ?? 0) > Date.now() ? value : { ...value, windows: [] })
 }

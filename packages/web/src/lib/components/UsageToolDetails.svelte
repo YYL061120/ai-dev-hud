@@ -10,6 +10,7 @@
   const toolName = (tool: string) => tool === 'claude-code' ? 'Claude Code' : tool === 'codex' ? 'OpenAI / Codex' : tool
   const money = (value: number | null, partial: number) => value === null ? words('金额未知', 'Cost unknown') : new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(value) + (partial ? words(' · 部分估算', ' · partial') : '')
   const number = (value: number) => value.toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')
+  const observationReason = (reason?: string) => ({ disabled: words('未启用 Claude 接入', 'Claude connection not enabled'), 'waiting-response': words('等待首次正常响应', 'Waiting for first normal response'), 'missing-session': words('官方输入缺少会话标识，无法归属', 'Official input has no session identity'), 'multiple-sessions': words('多个活跃会话，无法安全归属', 'Multiple active sessions; attribution unavailable'), expired: words('会话观测过期，等待新响应', 'Session observation expired; waiting for new response'), cleared: words('已清除观测，等待新响应', 'Observation cleared; waiting for new response'), 'configuration-conflict': words('statusline 配置已更改，接入失效', 'Statusline settings changed; connection invalid'), 'missing-windows': words('官方响应未提供套餐窗口', 'Official response has no subscription windows') })[reason ?? ''] ?? words('当前会话额度未知', 'Session quota unknown')
   const duration = (minutes: number | null) => minutes === null ? words('本期', 'Current window') : minutes % 1440 === 0 ? `${minutes / 1440} ${words('天窗口', 'day window')}` : minutes % 60 === 0 ? `${minutes / 60} ${words('小时窗口', 'hour window')}` : `${minutes} ${words('分钟窗口', 'minute window')}`
   $: local = ring.key === snapshot.currentDeviceKey && ring.source !== 'imported'
   $: groups = ringToolUsage(ring, local ? ['claude-code', 'codex'] : [])
@@ -21,8 +22,8 @@
     <section class="tool" style={`--tool-color:${group.tool === 'claude-code' ? '#e89968' : group.tool === 'codex' ? '#f3f3f5' : '#9ab9d0'}`} data-tool={group.tool}>
       <header><h4>{toolName(group.tool)}</h4><span title={words('基于已采集用量的金额估算，非订阅账单', 'Estimated from collected usage; not a subscription bill')}>{money(group.cost, group.missingEstimates)}</span></header>
       {#if subscription?.windows.length}
-        <p class="scope">{words('账号共享', 'Shared account')}</p>
-        {#if subscription.validUntil !== undefined}<p class="observation">{words('当前 Codex CLI 账号 · 核验 ', 'Current Codex CLI account · checked ')}{new Date(subscription.observedAt).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')} · {words('有效至 ', 'valid until ')}{new Date(subscription.validUntil).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>{/if}
+        <p class="scope">{subscription.scope === 'session-observed' ? words('当前会话观测 · 账号未核验', 'Session observation · account unverified') : words('账号共享', 'Shared account')}</p>
+        {#if subscription.validUntil !== undefined}<p class="observation">{subscription.scope === 'session-observed' ? words('Claude statusline · 观察 ', 'Claude statusline · observed ') : words('当前 Codex CLI 账号 · 核验 ', 'Current Codex CLI account · checked ')}{new Date(subscription.observedAt).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')} · {words('有效至 ', 'valid until ')}{new Date(subscription.validUntil).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>{/if}
         {#each subscription.windows as window}
           {@const status = subscriptionWindowState(subscription, window, now, snapshot.subscriptionGenerations?.[group.tool])}
           <div class="quota" data-quota-state={status}>
@@ -31,7 +32,7 @@
           </div>
         {/each}
         {#if expanded}<small class="observation">{subscription.source} · {words('观测于 ', 'Observed ')}{new Date(subscription.observedAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}</small>{/if}
-      {:else}<p class="quota unknown">{local ? words('账号套餐额度未知', 'Account quota unknown') : words('设备未提供账号额度', 'Account quota unavailable for this device')}</p>{/if}
+      {:else}<p class="quota unknown">{local ? group.tool === 'claude-code' ? observationReason(candidate?.reason) : words('账号套餐额度未知', 'Account quota unknown') : words('设备未提供账号额度', 'Account quota unavailable for this device')}</p>{#if local && group.tool === 'claude-code'}<p class="observation">{words('在本地用量页启用接入；或在 Claude Code 输入 /usage 查看官方用量。', 'Enable the connection on Local usage, or enter /usage in Claude Code for official usage.')}</p>{/if}{/if}
       <div class="model-list">
         {#each group.models as model}
           <div class="model"><span title={`${model.model} · ${model.provider}`}>{model.model}</span><b>{number(model.tokens)} <small>tokens</small></b><small title={words('用量金额估算', 'Estimated usage cost')}>{money(model.cost, model.missingEstimates)}</small></div>

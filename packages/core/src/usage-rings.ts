@@ -10,7 +10,7 @@ export interface UsageRing extends UsageTotals {
 }
 export interface UsageRingsSnapshot {
   subscriptions?: ToolSubscription[]
-  /** Missing/null means no current login ownership can be proved: all quota progress stays unknown. */
+  /** Missing/null means no current source-bound observation: all quota progress stays unknown. */
   subscriptionGenerations?: Record<string, string | null>
   version: 1; period: UsagePeriod; since: number; until: number; generatedAt: number; currentDeviceKey: string
   metric: 'observed-device-token-share'; total: UsageRing; devices: UsageRing[]; syncConfigured: false

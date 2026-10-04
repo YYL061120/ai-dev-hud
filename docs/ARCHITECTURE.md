@@ -1,5 +1,7 @@
 # AI Dev HUD 架构与仓库侦察
 
+2026-10-04 本地扩展：[CLAUDE_SESSION_HANDOFF.md](CLAUDE_SESSION_HANDOFF.md)。presentation 只消费 core Claude DTO 和 typed subscription；CLI manager 处理显式配置生命周期，claude-observation 处理白名单窗口与会话信号，file-mutex 用 SQLite OS 锁串行化。原 provider parsing 不变；Claude session-observed 不证明账号归属，与 Codex account-shared 的短时内存核验分开。
+
 ### 审查后的账号额度边界（2026-10-03）
 
 后续审查认可的短时方案已替代下文永久 unknown：同一连接非空 type/email/planType 只在内存前后比较，无账号事件/错误/异常退出才发布随机观察 generation、observedAt、最多 30 秒 validUntil，正常 EOF 可保留到截止；15 秒重验，UI 每秒失效。外部切号存在延迟，同邮箱/同套餐工作区无法严格区分，不声称瞬时一致。捕获使用现有 SQLite BEGIN IMMEDIATE OS 锁，进程死亡自动释放，不抢活锁；同毫秒空观察优先，其他观察按入口 hrtime 顺序；只校验使用的 map/fallback ID。详见 CODEX_QUOTA_LIVE_HANDOFF.md。

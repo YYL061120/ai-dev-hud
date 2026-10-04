@@ -26,10 +26,15 @@ import { AIUSAGE_DIR } from './config.js'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { captureClaudeSubscription } from './local-control/subscriptions.js'
+import { runClaudeStatusline } from './local-control/claude-observation.js'
 
 const DB_PATH = join(AIUSAGE_DIR, 'cache.db')
 
 const program = new Command()
+
+program.command('claude-statusline').requiredOption('--installation <id>').requiredOption('--state-dir <path>').description('Compose original statusline output with explicitly enabled local session observations').action(async options => {
+  try { process.exitCode = await runClaudeStatusline(process.stdin, options.installation, options.stateDir) } catch { process.exitCode = 1 }
+})
 
 program.command('capture-claude-limits').description('Capture official statusline quota fields from stdin locally; does not configure Claude').action(async () => {
   try { await captureClaudeSubscription(process.stdin) } catch { console.error('无法保存套餐状态；输入须为有界官方 statusline JSON。'); process.exitCode = 1 }

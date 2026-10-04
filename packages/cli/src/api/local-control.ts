@@ -8,6 +8,7 @@ import type { UsageMetadataStore } from '../local-control/usage.js'
 import { UsageExportJobs } from '../local-control/usage-export.js'
 import { codexMetadataStatus } from '../local-control/session-metadata.js'
 import { readSubscriptions } from '../local-control/subscriptions.js'
+import { ClaudeStatuslineManager } from '../local-control/claude-integration.js'
 export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new LocalControlError('JSON content type required', 415)
   const chunks: Buffer[] = []; let bytes = 0
@@ -19,7 +20,7 @@ export async function boundedJson(req: http.IncomingMessage, maximum = 16 * 1024
   } catch { throw new LocalControlError('Invalid JSON') }
 }
 export const reply = (res: http.ServerResponse, body: unknown, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)) }
-export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json')), usage?: () => UsageMetadataStore, runWrite: <T>(task: () => T | Promise<T>) => Promise<T> = async task => task()) {
+export function createLocalControlHandler(registry = new ProjectRegistry(path.join(AIUSAGE_DIR, 'projects.json')), usage?: () => UsageMetadataStore, runWrite: <T>(task: () => T | Promise<T>) => Promise<T> = async task => task(), claude = new ClaudeStatuslineManager()) {
   const exports = new UsageExportJobs()
   return async (req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> => {
     if (!url.pathname.startsWith('/api/local/')) return false
@@ -29,6 +30,15 @@ export function createLocalControlHandler(registry = new ProjectRegistry(path.jo
       const remote = req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? ''
       if (!isLoopbackHost(remote) || !isLoopbackHost(new URL(`http://${req.headers.host}`).hostname)) throw new LocalControlError('Local computer access required', 403)
       const route = url.pathname.slice('/api/local/'.length)
+      if (route === 'claude/statusline' && req.method === 'GET') { reply(res, await claude.status()); return true }
+      if (route === 'claude/statusline/preview' && req.method === 'POST') {
+        const body = await boundedJson(req)
+        if (body.action !== 'enable' && body.action !== 'disable') throw new LocalControlError('Invalid statusline action')
+        reply(res, await claude.preview(body.action)); return true
+      }
+      if (route === 'claude/statusline/confirm' && req.method === 'POST') { const body = await boundedJson(req); reply(res, await runWrite(() => claude.confirm(String(body.id), body.confirm === true))); return true }
+      if (route === 'claude/statusline/clear' && req.method === 'POST') { const body = await boundedJson(req); if (body.confirm !== true) throw new LocalControlError('Explicit observation clearing confirmation required'); await runWrite(() => claude.clear()); reply(res, { ok: true }); return true }
+      if (route === 'claude/statusline/pause' && req.method === 'POST') { const body = await boundedJson(req); if (body.confirm !== true) throw new LocalControlError('Explicit capture stopping confirmation required'); reply(res, await runWrite(() => claude.pause())); return true }
       if (route.startsWith('usage')) {
         if (!usage) throw new LocalControlError('Usage service unavailable', 503)
         const store = usage()

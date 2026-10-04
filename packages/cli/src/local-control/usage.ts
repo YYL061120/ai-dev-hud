@@ -43,6 +43,24 @@ export class UsageMetadataStore {
       DROP TRIGGER IF EXISTS hud_local_identity_insert;
       DROP TRIGGER IF EXISTS hud_local_identity_delete;
       DROP TRIGGER IF EXISTS hud_local_identity_update;
+      DROP TRIGGER IF EXISTS hud_local_identity_replace;
+      DROP TRIGGER IF EXISTS hud_local_identity_update_replace;
+      CREATE TRIGGER hud_local_identity_update_replace BEFORE UPDATE OF id ON records
+      WHEN OLD.id IS NOT NEW.id AND EXISTS(SELECT 1 FROM records WHERE id=NEW.id AND origin='local')
+      BEGIN
+        UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1;
+        INSERT INTO hud_usage_identity_changes SELECT (SELECT revision FROM hud_usage_local_revision WHERE id=1),id,device_instance_id,NULL,NULL FROM records WHERE id=NEW.id AND origin='local';
+        UPDATE hud_usage_identity_journal_state SET floor=MAX(floor,(SELECT revision-100000 FROM hud_usage_local_revision WHERE id=1)) WHERE id=1;
+        DELETE FROM hud_usage_identity_changes WHERE revision<=(SELECT floor FROM hud_usage_identity_journal_state WHERE id=1);
+      END;
+      CREATE TRIGGER hud_local_identity_replace BEFORE INSERT ON records
+      WHEN EXISTS(SELECT 1 FROM records WHERE id=NEW.id AND origin='local' AND (device_instance_id IS NOT NEW.device_instance_id OR origin IS NOT NEW.origin))
+      BEGIN
+        UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1;
+        INSERT INTO hud_usage_identity_changes SELECT (SELECT revision FROM hud_usage_local_revision WHERE id=1),id,device_instance_id,NULL,NULL FROM records WHERE id=NEW.id AND origin='local';
+        UPDATE hud_usage_identity_journal_state SET floor=MAX(floor,(SELECT revision-100000 FROM hud_usage_local_revision WHERE id=1)) WHERE id=1;
+        DELETE FROM hud_usage_identity_changes WHERE revision<=(SELECT floor FROM hud_usage_identity_journal_state WHERE id=1);
+      END;
       CREATE TRIGGER hud_local_identity_insert AFTER INSERT ON records WHEN NEW.origin='local'
       BEGIN
         UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1;
@@ -184,9 +202,16 @@ export class UsageMetadataStore {
       } else {
         const changes=this.db.prepare('SELECT * FROM hud_usage_identity_changes WHERE revision>? AND revision<=? ORDER BY revision LIMIT 1000').all(index.revision,currentRevision) as Array<{revision:number;old_id:string|null;old_device:string|null;new_id:string|null;new_device:string|null}>
         const remove=this.db.prepare('DELETE FROM hud_local_identity WHERE device_key=? AND record_key=?')
+        // BEFORE triggers observe REPLACE victims even with recursive_triggers=0.
+        // They can also run for IGNORE: reconcile actual rows in this read snapshot,
+        // rather than treating every insert attempt as a committed replacement.
+        const actual=this.db.prepare(`SELECT id,device_instance_id FROM records WHERE id=? AND ${LOCAL_RECORDS_WHERE}`)
         for (const change of changes) {
           if (change.old_id!==null) remove.run(...key(change.old_id,change.old_device))
-          if (change.new_id!==null) put.run(...key(change.new_id,change.new_device))
+          for (const id of new Set([change.old_id,change.new_id])) if (id!==null) {
+            const row=actual.get(id) as {id:string;device_instance_id:string|null}|undefined
+            if (row) put.run(...key(row.id,row.device_instance_id))
+          }
         }
         index.revision=changes.at(-1)?.revision ?? index.revision
       }

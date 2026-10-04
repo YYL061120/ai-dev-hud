@@ -1,5 +1,20 @@
 # 项目状态
 
+## 2026-10-04：REPLACE 身份日志 P2 修复
+
+Implemented: 使用 BEFORE INSERT 捕获 REPLACE 隐式删除的旧本地身份；BEFORE UPDATE OF id 捕获 UPDATE OR REPLACE 的冲突受害记录。分页重放按当前事务实际记录核对旧/新 ID，因此 IGNORE/未发生替换的尝试不会制造或丢掉身份。原 insertRecord、SQLite recursive_triggers、parser 和协议保持原语义。
+
+Not completed: 仍待父任务固定提交复审；真实 Drive/三机与 Mac/Linux 原生验证未新增证据，不放行真实同步。未访问真实目录、其他机器、安装任务或 push。
+
+Files changed: usage.ts、新 local-identity-replace.test.ts、PROJECT_STATE/HANDOFF/SYNC_SETUP。
+
+Tests: 定向8项通过，含4项新增替换回归、双连接且recursive_triggers=0、IGNORE、连续REPLACE、UPDATE OR REPLACE；持续增长第二轮合并1/发布50000与百万取消4ms/停止8ms回归通过。固定提交全量构建/collector/类型/测试与生产合成UI结果见本轮最终报告和 .tmp/replace-sync-evidence。
+
+Three highest-priority manual tests:
+1. 父任务固定提交重跑旧身份误去重复现。
+2. 隔离双连接重复替换设备/origin并确认当前身份去重、退休身份可导入。
+3. 对新提交复查持续增长与停止，真实同步仍待完整平台验收。
+
 ## 2026-10-04：继续补齐 Mac/POSIX 自动同步
 
 Implemented: 新增 C 发布 helper、有限 IPC、collector/full CLI 构建 hook。使用已安装的 Apple clang/系统 cc；逐级 openat 拒绝 symlink、核对 dev/ino、相对创建、排他改名、fsync 与停止。此节替代旧“Mac 拒绝启用”的平台缺失结论。保留 Windows/HUD/provider 实现，无新增第三方依赖。

@@ -1,5 +1,9 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+## 最新：REPLACE 隐式删除的身份日志修复
+
+旧948f829e审查发现实际 insertRecord 使用 REPLACE，recursive_triggers=0 时旧身份可能残留。现在用 BEFORE 捕获替换受害身份，分页回放从当前实际记录重建相关键；IGNORE 也保持正确。没有改变全局 SQLite 开关、写入/provider/传输语义或扩展功能。详情及定向8项证据见 PROJECT_STATE 最新节，固定提交全量结果见 .tmp/replace-sync-evidence/result.json。待父任务复审；Mac原生/真实Drive/三机验证仍未新增，不放行真实同步，未push。
+
 ## 最新：Mac/POSIX 适配实现补齐，待平台验证与独立复审
 
 Implemented: native C + Node 有界 IPC + collector 构建 hook。Mac 使用已安装 Apple clang，openat/renameatx_np(RENAME_EXCL) 发布；Linux 使用 renameat2(RENAME_NOREPLACE)。无安装、下载、运行时编译、认证、权限绕过或后台任务。Windows 456e813 适配器保持原实现。

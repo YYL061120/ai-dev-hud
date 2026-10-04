@@ -1,5 +1,7 @@
 # Google Drive 本地用量文件夹同步
 
+最新 REPLACE 修复：身份日志在 INSERT/ID UPDATE 替换之前捕获冲突旧本地记录，不依赖 recursive_triggers 打开；分页回放按同一事务中实际 records 核对相关 ID，防止 REPLACE 隐式删除留下旧键，并避免 INSERT OR IGNORE 被误当成真实替换。正常当前本地身份继续去重，退休身份不再被错误抑制；原写入与上传 allowlist 不变。此修复没有增加真实平台验证证据，下面 Mac/Drive 待测限制仍适用。
+
 ## 最新：Mac/POSIX 安全发布适配器（待真实平台验证）
 
 本节替代下方历史版本关于“Mac 明确拒绝启用”的说明。现在 macOS/Linux 接入目录文件描述符发布；没有 helper、构建失败或文件系统不支持时仍拒绝，绝不按路径降级。Windows 456e813 的既有适配器保持原实现。

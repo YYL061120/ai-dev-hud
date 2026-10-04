@@ -2,7 +2,9 @@
 
 ## 本地文件夹同步（2026-10-04）
 
-审查修复：私人 DB/状态目录使用真实路径保护；Windows directory-guard 将所有外部批次写入/flush/rename/失败清理绑定原生句柄，禁止按路径降级。macOS/Linux 在安全适配器未实现前明确拒绝启用自动同步。usage 本机身份索引改为仅 records 身份变更的 SQLite revision，自动链路有可取消的分页准备与续扫，收据/检查点不触发重建。详情和当前部署限制见 SYNC_SETUP 顶部。
+持续增长索引使用固定 rowid 基线上界及 SQLite trigger 维护的私有 identity journal，追加、删除、身份/origin 更新按 revision 分页重放；保留100000项，缺失历史则重新建基线，不以旧索引继续导入。导入事务重复核对 revision，变更日志不进入 metadata 协议。每轮采集少量追加不会重置初始大历史进度。
+
+审查修复：私人 DB/状态目录使用真实路径保护；Windows directory-guard 将外部批次写入/flush/rename/失败清理绑定原生句柄。新增 Mac/POSIX C helper：本机已安装工具链编译，逐级 openat 拒绝 symlink、核对 dev/ino，所有创建与排他改名绑定同一 dirfd。两适配器均禁止按路径降级；helper 缺失或文件系统不支持时失败停止。Mac/Linux 原生构建与执行尚未验证，FileProvider/Drive 兼容待实测。usage 本机身份索引仅由 records 身份 revision 失效，有分页预算/取消/续扫。详情和同账号强权限威胁边界见 SYNC_SETUP 顶部。
 
 CLI `local-control/folder-sync.ts` 为独立文件系统 transport/controller，复用 `UsageMetadataStore.localSyncPage()` 本机 allowlist 投影及 `import()` 事务，provider parser 不变。私人 SQLite 保存配置/摘要/修订/收据/轮转检查点/进程 lease。core `FolderSyncStatus` 为有类型本地 DTO；web 只调用 loopback、Origin 和既有认证保护的 API，不读日志/DB。serve 将采集与合并放入既有写队列，HUD 继续读取既有 rings API。独立 `dist-collector` 提供无 Electron 的 Codex/Claude `folder-sync --watch`。
 

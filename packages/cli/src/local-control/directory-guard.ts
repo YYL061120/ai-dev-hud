@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { LocalControlError } from './projects.js'
+import { lockPosixDirectory } from './posix-directory-guard.js'
 
 /** Windows binds publication to a native directory handle: relative NtCreateFile
  * and handle-relative rename never re-resolve a parent path. Unsupported
@@ -101,7 +102,9 @@ finally { if($handles) { foreach($handle in $handles) { $handle.Dispose() } } }
 `
 export interface DirectoryLease { readonly alive: boolean; publish(filename: string, text: string): Promise<void>; release(): Promise<void> }
 export async function lockSyncDirectory(directory: string, platform: NodeJS.Platform = process.platform): Promise<DirectoryLease> {
-  if (platform !== 'win32') throw new LocalControlError('本平台尚无经验证的安全目录句柄适配器；自动文件夹同步暂不可启用，请继续本机采集或手动 metadata 传输', 409)
+  if (platform !== process.platform) throw new LocalControlError('不能以模拟平台启用本机原生发布', 409)
+  if (platform === 'darwin' || platform === 'linux') return lockPosixDirectory(directory)
+  if (platform !== 'win32') throw new LocalControlError('此平台没有安全发布适配器', 409)
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   let alive = false, closed = false
   const completion = new Promise<void>(resolve => child.once('close', () => { alive = false; closed = true; resolve() }))

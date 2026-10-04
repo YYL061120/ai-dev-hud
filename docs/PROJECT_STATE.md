@@ -1,5 +1,22 @@
 # 项目状态
 
+## 2026-10-04：继续补齐 Mac/POSIX 自动同步
+
+Implemented: 新增 C 发布 helper、有限 IPC、collector/full CLI 构建 hook。使用已安装的 Apple clang/系统 cc；逐级 openat 拒绝 symlink、核对 dev/ino、相对创建、排他改名、fsync 与停止。此节替代旧“Mac 拒绝启用”的平台缺失结论。保留 Windows/HUD/provider 实现，无新增第三方依赖。
+
+同时修复独立审查新增持续增长 P2：有限 rowid 基线+100000 项私有身份日志，追加不重置分页，删除/身份/origin 更新增量重放；跨连接 revision 与导入事务再次核对，断档才重建。日志不上云。6 万条每轮增长第二轮完成，并合并 1 外机记录、实际发布 50000 合成记录；百万取消 5ms、停止 8ms（本机本次合成测量）。不承诺写入速度超过索引预算时仍及时收敛。
+
+Not completed: 当前 Windows 无 C 编译器，Mac/Linux 原生编译/验证尚未执行；未安装工具或改安全设置。FileProvider/真实 Drive/实际三机同步及后台部署均未验证，不放行真实同步。同账号进程直接操纵目录内文件项不能由路径 API 完全隔离；目录被改名后发布仍落在原目录身份。
+
+Files changed: native C、build-directory-guard、posix-directory-guard、tsup hook、IPC/目录测试、独立 POSIX 合成验证脚本、gitignore、设置/交接/架构/传输文档。
+
+Tests: Windows 构建/类型/全量回归/生产合成 UI 结果见本轮最终报告及 .tmp/posix-sync-evidence。IPC 测试不代表 Mac 系统调用通过；须在实际平台运行 scripts/verify-posix-folder-guard.ts。
+
+Three highest-priority manual tests:
+1. 父任务独立复审新固定提交。
+2. 授权 Mac 上本机构建并运行临时合成原生验证。
+3. 复审通过后由用户选择真实目录，验收 FileProvider/Windows Drive 兼容、离线恢复与汇总。
+
 ## 2026-10-04：1e158f5 独立审查修复，等待再次审查
 
 Implemented:

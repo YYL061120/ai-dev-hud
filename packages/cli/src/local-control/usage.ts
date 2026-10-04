@@ -9,7 +9,7 @@ import { buildUsageRings, type DeviceUsageOrigin, type UsagePeriod } from '@aius
 const hash = (namespace: string, value: string) => createHash('sha256').update(`${namespace}\0${value}`).digest('hex')
 export const deviceKeyFor = (id: string) => hash('device', id)
 const projection = 'id, ts, updated_at, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source, session_id, cwd, device_instance_id, platform'
-const identityCaches = new WeakMap<Database.Database, { currentId: string; revision: number; cursor: number; complete: boolean }>()
+const identityCaches = new WeakMap<Database.Database, { currentId: string; revision: number; cursor: number; ceiling: number; baselineDone: boolean; complete: boolean }>()
 const revision = (db: Database.Database) => (db.prepare('SELECT revision FROM hud_usage_local_revision WHERE id=1').get() as {revision:number}).revision
 const projectPathKey = (value: string) => /^[a-z]:|\\/.test(value.toLowerCase()) ? value.replaceAll('\\', '/').toLowerCase().replace(/\/+$/, '') : value.replace(/\/+$/, '')
 function localRow(row: any, currentId: string, pricing?: (model: string) => PriceEntry | undefined, exchangeRate?: number): UsageMetadataRecord {
@@ -35,15 +35,36 @@ function localRow(row: any, currentId: string, pricing?: (model: string) => Pric
 export class UsageMetadataStore {
   constructor(private db: Database.Database, private currentId: string) {
     // Receipt/checkpoint/pricing writes cannot invalidate local record identities.
-    db.exec(`CREATE TABLE IF NOT EXISTS hud_usage_local_revision(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
+    db.transaction(() => db.exec(`CREATE TABLE IF NOT EXISTS hud_usage_local_revision(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
       INSERT OR IGNORE INTO hud_usage_local_revision VALUES(1,0);
-      CREATE TRIGGER IF NOT EXISTS hud_local_identity_insert AFTER INSERT ON records WHEN NEW.origin='local'
-      BEGIN UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1; END;
-      CREATE TRIGGER IF NOT EXISTS hud_local_identity_delete AFTER DELETE ON records WHEN OLD.origin='local'
-      BEGIN UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1; END;
-      CREATE TRIGGER IF NOT EXISTS hud_local_identity_update AFTER UPDATE OF id,device_instance_id,origin ON records
+      CREATE TABLE IF NOT EXISTS hud_usage_identity_changes(revision INTEGER PRIMARY KEY,old_id TEXT,old_device TEXT,new_id TEXT,new_device TEXT);
+      CREATE TABLE IF NOT EXISTS hud_usage_identity_journal_state(id INTEGER PRIMARY KEY CHECK(id=1),floor INTEGER NOT NULL);
+      INSERT OR IGNORE INTO hud_usage_identity_journal_state SELECT 1,revision FROM hud_usage_local_revision WHERE id=1;
+      DROP TRIGGER IF EXISTS hud_local_identity_insert;
+      DROP TRIGGER IF EXISTS hud_local_identity_delete;
+      DROP TRIGGER IF EXISTS hud_local_identity_update;
+      CREATE TRIGGER hud_local_identity_insert AFTER INSERT ON records WHEN NEW.origin='local'
+      BEGIN
+        UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1;
+        INSERT INTO hud_usage_identity_changes SELECT revision,NULL,NULL,NEW.id,NEW.device_instance_id FROM hud_usage_local_revision WHERE id=1;
+        UPDATE hud_usage_identity_journal_state SET floor=MAX(floor,(SELECT revision-100000 FROM hud_usage_local_revision WHERE id=1)) WHERE id=1;
+        DELETE FROM hud_usage_identity_changes WHERE revision<=(SELECT floor FROM hud_usage_identity_journal_state WHERE id=1);
+      END;
+      CREATE TRIGGER hud_local_identity_delete AFTER DELETE ON records WHEN OLD.origin='local'
+      BEGIN
+        UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1;
+        INSERT INTO hud_usage_identity_changes SELECT revision,OLD.id,OLD.device_instance_id,NULL,NULL FROM hud_usage_local_revision WHERE id=1;
+        UPDATE hud_usage_identity_journal_state SET floor=MAX(floor,(SELECT revision-100000 FROM hud_usage_local_revision WHERE id=1)) WHERE id=1;
+        DELETE FROM hud_usage_identity_changes WHERE revision<=(SELECT floor FROM hud_usage_identity_journal_state WHERE id=1);
+      END;
+      CREATE TRIGGER hud_local_identity_update AFTER UPDATE OF id,device_instance_id,origin ON records
       WHEN (OLD.origin='local' OR NEW.origin='local') AND (OLD.id IS NOT NEW.id OR OLD.device_instance_id IS NOT NEW.device_instance_id OR OLD.origin IS NOT NEW.origin)
-      BEGIN UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1; END;`)
+      BEGIN
+        UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1;
+        INSERT INTO hud_usage_identity_changes SELECT revision,CASE WHEN OLD.origin='local' THEN OLD.id END,OLD.device_instance_id,CASE WHEN NEW.origin='local' THEN NEW.id END,NEW.device_instance_id FROM hud_usage_local_revision WHERE id=1;
+        UPDATE hud_usage_identity_journal_state SET floor=MAX(floor,(SELECT revision-100000 FROM hud_usage_local_revision WHERE id=1)) WHERE id=1;
+        DELETE FROM hud_usage_identity_changes WHERE revision<=(SELECT floor FROM hud_usage_identity_journal_state WHERE id=1);
+      END;`))()
   }
   projectKeyFor(cwd: string): string { return hash('project', `${deviceKeyFor(this.currentId)}\0${projectPathKey(cwd)}`) }
   /** Automatic transport excludes imported and foreign-device rows. Rolling rowid
@@ -137,27 +158,41 @@ export class UsageMetadataStore {
     try { return validateUsageTransfer({ format: 'ai-dev-hud-usage', version: 1, exportedAt, records }) }
     catch { throw new LocalControlError('Some local records need normalized usage values before export', 409) }
   }
-  /** Identity-only revision is maintained by SQLite triggers across connections. */
+  /** Finite baseline plus a bounded private identity journal: append, delete and
+   * identity updates are replayed without discarding pagination progress. */
   private identityPage() {
-    const cached = identityCaches.get(this.db)
-    const currentRevision = revision(this.db)
-    let index = cached
-    if (cached?.currentId !== this.currentId || cached.revision !== currentRevision) {
-      if (this.db.pragma('temp_store', { simple: true }) !== 1) this.db.pragma('temp_store = FILE')
-      this.db.exec('DROP TABLE IF EXISTS temp.hud_local_identity; CREATE TEMP TABLE hud_local_identity(device_key TEXT, record_key TEXT, PRIMARY KEY(device_key,record_key)) WITHOUT ROWID')
-      index = { currentId: this.currentId, revision: currentRevision, cursor: 0, complete: false }
-      identityCaches.set(this.db, index)
-    }
-    if (index!.complete) return true
-    const select = this.db.prepare(`SELECT rowid AS cursor, id, device_instance_id FROM records WHERE ${LOCAL_RECORDS_WHERE} AND rowid>? ORDER BY rowid LIMIT 1000`)
-    const put = this.db.prepare('INSERT OR IGNORE INTO hud_local_identity VALUES (?,?)')
-    this.db.transaction(() => {
-        const rows = select.all(index!.cursor) as Array<{ cursor: number; id: string; device_instance_id: string }>
-        for (const row of rows) { const device = deviceKeyFor(!row.device_instance_id || row.device_instance_id === 'unknown' ? this.currentId : row.device_instance_id); put.run(device, hash('record', `${device}\0${row.id}`)) }
-        index!.cursor = rows.at(-1)?.cursor ?? index!.cursor
-        index!.complete = rows.length < 1000
+    if (this.db.pragma('temp_store', { simple: true }) !== 1) this.db.pragma('temp_store = FILE')
+    return this.db.transaction(() => {
+      const currentRevision = revision(this.db)
+      const floor = (this.db.prepare('SELECT floor FROM hud_usage_identity_journal_state WHERE id=1').get() as {floor:number}).floor
+      let index = identityCaches.get(this.db)
+      if (index?.currentId !== this.currentId || index.revision < floor) {
+        this.db.exec('DROP TABLE IF EXISTS temp.hud_local_identity; CREATE TEMP TABLE hud_local_identity(device_key TEXT, record_key TEXT, PRIMARY KEY(device_key,record_key)) WITHOUT ROWID')
+        const ceiling = (this.db.prepare('SELECT COALESCE(MAX(rowid),0) AS ceiling FROM records').get() as {ceiling:number}).ceiling
+        index = { currentId: this.currentId, revision: currentRevision, cursor: 0, ceiling, baselineDone: false, complete: false }
+        identityCaches.set(this.db, index)
+      }
+      if (index.complete && index.revision === currentRevision) return true
+      index.complete = false
+      const key = (id:string, deviceId:string|null) => { const device=deviceKeyFor(!deviceId || deviceId==='unknown' ? this.currentId : deviceId);return [device,hash('record',`${device}\0${id}`)] }
+      const put=this.db.prepare('INSERT OR IGNORE INTO hud_local_identity VALUES (?,?)')
+      if (!index.baselineDone) {
+        const rows = this.db.prepare(`SELECT rowid AS cursor, id, device_instance_id FROM records WHERE ${LOCAL_RECORDS_WHERE} AND rowid>? AND rowid<=? ORDER BY rowid LIMIT 1000`).all(index.cursor,index.ceiling) as Array<{cursor:number;id:string;device_instance_id:string}>
+        for (const row of rows) put.run(...key(row.id,row.device_instance_id))
+        index.cursor=rows.at(-1)?.cursor ?? index.cursor
+        index.baselineDone=rows.length<1000
+      } else {
+        const changes=this.db.prepare('SELECT * FROM hud_usage_identity_changes WHERE revision>? AND revision<=? ORDER BY revision LIMIT 1000').all(index.revision,currentRevision) as Array<{revision:number;old_id:string|null;old_device:string|null;new_id:string|null;new_device:string|null}>
+        const remove=this.db.prepare('DELETE FROM hud_local_identity WHERE device_key=? AND record_key=?')
+        for (const change of changes) {
+          if (change.old_id!==null) remove.run(...key(change.old_id,change.old_device))
+          if (change.new_id!==null) put.run(...key(change.new_id,change.new_device))
+        }
+        index.revision=changes.at(-1)?.revision ?? index.revision
+      }
+      index.complete=index.baselineDone && index.revision===currentRevision
+      return index.complete
     })()
-    return index!.complete
   }
   /** Automatic imports prepare in bounded pages before entering synchronous
    * import transactions. A cancelled/expired build resumes at its saved cursor. */
@@ -180,6 +215,8 @@ export class UsageMetadataStore {
     } else this.localIdentityIndex()
     const local = this.db.prepare('SELECT 1 FROM hud_local_identity WHERE device_key=? AND record_key=?')
     const result = this.db.transaction(() => {
+      const cached=identityCaches.get(this.db)
+      if (!cached?.complete || cached.currentId!==this.currentId || cached.revision!==revision(this.db)) throw new LocalControlError('本机记录身份已变化；下一轮分页续扫后重试',409)
       this.db.exec('CREATE TABLE IF NOT EXISTS hud_usage_metadata (device_key TEXT NOT NULL, record_key TEXT NOT NULL, updated_at INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(device_key, record_key))')
       this.db.exec('CREATE TABLE IF NOT EXISTS hud_usage_import_receipts (device_key TEXT PRIMARY KEY, received_at INTEGER NOT NULL)')
       const received = new Set<string>()

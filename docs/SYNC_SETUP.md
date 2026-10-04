@@ -1,5 +1,39 @@
 # Google Drive 本地用量文件夹同步
 
+## 最新：Mac/POSIX 安全发布适配器（待真实平台验证）
+
+本节替代下方历史版本关于“Mac 明确拒绝启用”的说明。现在 macOS/Linux 接入目录文件描述符发布；没有 helper、构建失败或文件系统不支持时仍拒绝，绝不按路径降级。Windows 456e813 的既有适配器保持原实现。
+
+Mac 构建需要**已经安装**的 Apple C 工具链 `/usr/bin/clang` 和项目原有 Node >=20、pnpm@9.15.0；Linux 使用已安装的 `/usr/bin/cc`。没有增加第三方原生依赖，不下载/安装编译器，不更改系统策略；若缺少工具链，构建失败并交由用户另行处理。构建按本机架构生成独立 helper 到 collector 输出目录；部署时保留 `index.js` 与同目录 `hud-directory-guard`，不得仅复制 JS，也不要拿 Windows 构建产物当 Mac 安装包。
+
+```sh
+pnpm --filter @juliantanx/aiusage... install --frozen-lockfile
+pnpm build:collector
+pnpm --filter @juliantanx/aiusage exec tsx ../../scripts/verify-posix-folder-guard.ts
+node packages/cli/dist-collector/index.js folder-sync --help
+node packages/cli/dist-collector/index.js folder-sync --status
+```
+
+上述原生验证只在临时目录生成合成 metadata，必须在实际 Mac/Linux 执行。本轮 Windows 没有 C 编译器，**尚未执行该原生验证或 Mac 构建**。先完成固定提交独立复审和此合成验证，再由用户显式选择目录启用：
+
+```sh
+node packages/cli/dist-collector/index.js folder-sync --directory '<用户本机明确选择的同步目录>' --enable --once
+node packages/cli/dist-collector/index.js folder-sync --watch
+node packages/cli/dist-collector/index.js folder-sync --pause
+```
+
+`--watch` 复用 Codex/Claude parser，60 秒补扫与增量发布；Ctrl+C/SIGTERM 停止。不启动 Electron。后台 LaunchAgent 仍由用户按下方预览自行安装，本轮未安装持久任务。
+
+原生实现逐级 `openat(O_DIRECTORY|O_NOFOLLOW)`，核对 Node 取得的 dev/ino；固定 dirfd 下排他创建 `.tmp`，文件 fsync 后由 macOS `renameatx_np(RENAME_EXCL)` 或 Linux `renameat2(RENAME_NOREPLACE)` 排他发布并 fsync 目录。目录 fsync 在建立 lease 时也预检，不支持会在写文件前拒绝。同名批次不覆盖，失败清理只处理仍匹配自己 inode 的临时项，异常中止残留 `.tmp` 会被扫描器忽略。参见 [Apple 官方 rename 手册源文件](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/rename.2)。
+
+边界：祖先路径被换成 symlink 后，发布仍绑定原来目录身份，不能写入新目标；POSIX 不锁死目录改名，因此可能发布在被改名后的原目录。若用户目录已经改名，应暂停并重新选择。具有同账号权限、能直接修改被绑定目录中临时文件或移动原目录的恶意进程不能靠此 API 完全隔离；inode 检查不是消除这种文件项竞争的证明。
+
+**FileProvider / Google Drive 实测仍待完成**：Mac 必须支持目录 open、排他 rename 和 fsync；Windows stream mount 必须支持已有相对原生操作。隔离 NTFS/普通本地目录通过不代表 Drive 通过。不支持会报错，保留源文件；发布后最终 fsync 意外失败可能留下完整批次，重试依靠 metadata 去重，不删除最终文件。不得为通过测试改 Drive 配置或绕过权限。
+
+持续增长索引修复：首次扫描固定 rowid 上界，分页进度不因每轮采集追加而重置；同一个 SQLite 事务维护私有身份变更日志，逐页重放追加、删除、id/device/origin 变化，再检查 revision 一致才允许导入。该日志含本机记录 ID/设备 ID，只在私人 DB 内，不导出、不放到 Drive；保留最多 100000 项，断档后必须重新分页建基线。正常每轮少量增长可以收敛；持续变更速度超过每轮处理预算或保留容量时，不承诺无条件及时收敛，也不使用不完整索引跳过去重。导入事务内再次核对 revision，准备后发生外部写入会拒绝本轮并下轮续扫。
+
+持续增长索引修复：首次扫描固定 rowid 上界，分页进度不因每轮采集追加而重置；同一个 SQLite 事务维护私有身份变更日志，逐页重放追加、删除、id/device/origin 变化，再检查 revision 一致才允许导入。该日志含本机记录 ID/设备 ID，只在私人 DB 内，不导出、不放到 Drive；保留最多 100000 项，断档后必须重新分页建基线。正常每轮少量增长可以收敛；持续变更速度超过每轮处理预算或保留容量时，不承诺无条件及时收敛，也不使用不完整索引跳过去重。导入事务内再次核对 revision，准备后发生外部写入会拒绝本轮并下轮续扫。
+
 ## 1e158f5 审查后的限制与修复
 
 旧版不放行真实同步。私人数据库现在按创建控制器时与启用时的 realpath 保护真实私人目录、状态目录及其祖先/子目录；数据库经 junction 打开也不能把云根选到它所在目录。Windows 发布由 PowerShell/.NET 调用系统 NtCreateFile 的 RootDirectory 相对创建，并由 NtSetInformationFile 的 RootDirectory 相对重命名，flush/失败清理也通过文件句柄执行。Node 不再对目录字符串写临时文件；辅助进程死亡后也不按路径降级写入。句柄不支持/被占用/重定向会明确拒绝；没有安装软件或修改安全配置。

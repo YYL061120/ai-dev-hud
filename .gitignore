@@ -26,5 +26,6 @@ RELEASE.md
 /.codegraph/
 /.tmp/
 **/dist-collector/
+packages/cli/native/bin/
 aiusage-data/
 blog/

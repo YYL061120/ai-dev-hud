@@ -12,7 +12,7 @@ it('pins native publication, refuses directory substitution, and leaves no outsi
   await mkdir(selected);await mkdir(outside)
   const lease=await lockSyncDirectory(selected)
   try {
-    await expect(rename(selected,join(root,'original'))).rejects.toThrow()
+    if (process.platform === 'win32') await expect(rename(selected,join(root,'original'))).rejects.toThrow()
     const filename=`${'a'.repeat(64)}.${randomUUID()}.${randomUUID()}.jsonl`
     await lease.publish(filename,'synthetic metadata\n')
     expect(await readFile(join(selected,filename),'utf8')).toBe('synthetic metadata\n')
@@ -23,9 +23,9 @@ it('pins native publication, refuses directory substitution, and leaves no outsi
     expect((await readdir(selected)).filter(n=>n.endsWith('.tmp'))).toEqual([])
   } finally {await lease.release();await rm(root,{recursive:true,force:true})}
 },20000)
-it('rejects unsupported platform before any automatic publication',async()=>{
-  await expect(lockSyncDirectory('unused','darwin')).rejects.toThrow('暂不可启用')
-  await expect(lockSyncDirectory('unused','linux')).rejects.toThrow('暂不可启用')
+it('rejects impersonating a foreign platform before any automatic publication',async()=>{
+  const foreign = process.platform === 'win32' ? 'darwin' : 'win32'
+  await expect(lockSyncDirectory('unused',foreign)).rejects.toThrow('模拟平台')
 })
 it('ancestor swap at publication cannot redirect a handle-relative temp or rename',async()=>{
   const root=await mkdtemp(join(tmpdir(),'hud-native-ancestor-')),parent=join(root,'parent'),selected=join(parent,'selected'),outside=join(root,'outside')

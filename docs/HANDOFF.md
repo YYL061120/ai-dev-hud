@@ -1,5 +1,22 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+## 最新：Mac/POSIX 适配实现补齐，待平台验证与独立复审
+
+Implemented: native C + Node 有界 IPC + collector 构建 hook。Mac 使用已安装 Apple clang，openat/renameatx_np(RENAME_EXCL) 发布；Linux 使用 renameat2(RENAME_NOREPLACE)。无安装、下载、运行时编译、认证、权限绕过或后台任务。Windows 456e813 适配器保持原实现。
+
+新增持续增长 P2 已修：固定基线上界+有界私有身份 journal，追加/删除/身份和 origin 更新不再直接清空索引，只有 journal 断档/本机身份改变重建。6 万条持续增长第二轮完成且真实隔离发布50000、合并1；百万取消回归通过。新提交需同时复审此 usage.ts 变化。
+
+Not completed: 本机无 C 工具链，未执行 Mac/Linux 原生编译与验证；不放行真实三机同步。现在是适配实现已加入但证据未取得，不能继续用“Mac 不支持”冒充任务完成。实际 FileProvider/Drive 和后台部署仍待用户步骤。
+
+Files changed: native helper、build script、POSIX adapter、tsup hook、IPC/目录测试、POSIX 合成验证、五份文档及 gitignore。
+
+Tests: 本轮最终报告及 .tmp/posix-sync-evidence 记录 Windows IPC/回归；Mac 原生测试未测，只有实际运行验证脚本后才能声称 POSIX 祖先替换已执行。
+
+Three highest-priority manual tests:
+1. 新固定提交独立审查。
+2. 授权 Mac 执行 SYNC_SETUP 最新构建及合成验证。
+3. 获准后验证实际 FileProvider/Drive、离线恢复与汇总。
+
 ## 最新：1e158f5 的 1P1+2P2 修复，仍等待复审
 
 Implemented: 私人DB/状态目录以真实路径保护，含经junction打开的DB；Windows外部发布使用原生目录/文件句柄相对操作，无按路径写入降级；本机身份索引仅由records身份revision失效，自动准备分页/预算/取消/续扫，导入期间identity变化不回落到同步全扫。页首启用后文案已修正。

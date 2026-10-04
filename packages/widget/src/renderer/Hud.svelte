@@ -3,7 +3,7 @@
   import type { HudAPI } from '../preload'
   import type { HudData } from '../hud-data'
   import type { HudState } from '../hud-window'
-  import type { UsagePeriod } from '../../../core/src/usage-rings.js'
+  import { invalidateSubscriptionSnapshot, type UsagePeriod } from '../../../core/src/usage-rings.js'
   import UsageRings from '../../../web/src/lib/components/UsageRings.svelte'
   import UsageToolDetails from '../../../web/src/lib/components/UsageToolDetails.svelte'
   const api = (window as Window & { hud: HudAPI }).hud
@@ -15,7 +15,7 @@
   const periods: Array<{ key: UsagePeriod; label: string }> = [{ key: 'today', label: '今日' }, { key: 'seven', label: '7 天' }, { key: 'thirty', label: '30 天' }, { key: 'lifetime', label: '累计' }]
   const number = (value: number) => value.toLocaleString('zh-CN')
   async function expand(expanded: boolean) { if (expanded) selectedDeviceKey = ringActiveKey ?? rings?.currentDeviceKey ?? null; try { state = await api.setExpanded(expanded); if (!expanded) ringActiveKey = null } catch { error = '无法调整 HUD，请重试' } }
-  async function refresh() { try { data = await api.refresh(); error = data.status === 'unavailable' ? data.error ?? '数据暂不可用' : '' } catch { error = '读取用量失败，请打开 Dashboard' } loading = false }
+  async function refresh() { try { data = await api.refresh(); error = data.status === 'unavailable' ? data.error ?? '数据暂不可用' : '' } catch { if (data.rings) data = { ...data, rings: Object.fromEntries(Object.entries(data.rings).map(([key, value]) => [key, invalidateSubscriptionSnapshot(value)])) as HudData['rings'] }; error = '读取用量失败，请打开 Dashboard' } loading = false }
   async function openDashboard() { opening = true; try { await api.openDashboard(); error = '' } catch { error = '无法打开 Dashboard，请确认本机 AIUsage 服务' } finally { opening = false } }
   onMount(() => {
     document.title = 'AI Dev HUD'; document.documentElement.lang = 'zh-CN'; document.documentElement.classList.add('hud-mode'); document.body.classList.add('hud-mode')

@@ -56,3 +56,7 @@ export function buildUsageRings(records: UsageMetadataRecord[], currentDeviceKey
   }).sort((a, b) => Number(b.key === currentDeviceKey) - Number(a.key === currentDeviceKey) || a.key.localeCompare(b.key))
   return { version: 1, period, since, until, generatedAt: now.getTime(), currentDeviceKey, metric: 'observed-device-token-share', total, devices, syncConfigured: false }
 }
+/** Invalidate quota authorization immediately while preserving collected usage. */
+export function invalidateSubscriptionSnapshot(snapshot: UsageRingsSnapshot): UsageRingsSnapshot {
+  return { ...snapshot, subscriptions: [], subscriptionGenerations: {} }
+}

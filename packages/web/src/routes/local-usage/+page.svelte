@@ -6,6 +6,7 @@
   import type { UsageExportProgress } from '../../../../core/src/usage-transfer.js'
   import { importUsageFile, type FileImportProgress } from '$lib/usage-file'
   import { beginUsageExport } from '$lib/usage-export-lifecycle'
+  import { invalidateSubscriptionSnapshot } from '../../../../core/src/usage-rings.js'
   import UsageRings from '$lib/components/UsageRings.svelte'
   let data: UsageOverview | null = null
   let busy = false, error = '', period = 'thirty', device = '', project = ''
@@ -18,9 +19,14 @@
   const estimate = (value: UsageTotals, language: string) => value.estimatedCost === null || value.estimatedCost === undefined ? (language === 'zh' ? '金额未知' : 'Cost unknown') : money(value.estimatedCost, language) + (value.missingEstimates ? (language === 'zh' ? ' · 部分估算' : ' · partial estimate') : '')
   async function operation(work: () => Promise<void>) { if (busy) return; busy = true; error = ''; try { await work() } catch (e) { error = e instanceof Error ? e.message : $t('control.error') } finally { busy = false } }
   async function refresh() {
-    data = await usageApi.overview(period, device, project)
-    const all = await usageApi.overview('lifetime', '', '')
-    devices = all.devices.map(r => r.key); projects = all.projects.map(r => r.key)
+    try {
+      data = await usageApi.overview(period, device, project)
+      const all = await usageApi.overview('lifetime', '', '')
+      devices = all.devices.map(r => r.key); projects = all.projects.map(r => r.key)
+    } catch (e) {
+      if (data) data = { ...data, ...(data.rings ? { rings: invalidateSubscriptionSnapshot(data.rings) } : {}), ...(data.ringPeriods ? { ringPeriods: Object.fromEntries(Object.entries(data.ringPeriods).map(([key, value]) => [key, invalidateSubscriptionSnapshot(value)])) as UsageOverview['ringPeriods'] } : {}) }
+      throw e
+    }
   }
   async function exportMetadata() {
     exportCreating = true

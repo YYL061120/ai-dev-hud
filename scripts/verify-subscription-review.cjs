@@ -34,13 +34,15 @@ async function run(){
  const subscriptions=await import(pathToFileURL(path.join(work,'subscriptions.js')).href),originalSpawn=cp.spawn,{syncBuiltinESMExports}=require('node:module'),{EventEmitter}=require('node:events'),{PassThrough}=require('node:stream')
  let priorGeneration
  try {
-  for(const scenario of ['verified','verified-again','changed','logout','email-null','event','abnormal','premature','error']){
+  for(const read of [subscriptions.readCodexProxy,subscriptions.readCodexStdio])for(const scenario of ['verified','verified-again','changed','logout','email-null','event','abnormal','premature','error']){
    const child=Object.assign(new EventEmitter(),{stdin:new PassThrough(),stdout:new PassThrough(),kill:()=>{}});cp.spawn=()=>child;syncBuiltinESMExports()
-   const pending=subscriptions.readCodexStdio('fixture.exe'),reply=(id,result)=>child.stdout.write(JSON.stringify({id,result})+'\n'),account=email=>({account:{type:'chatgpt',email,planType:'pro'}})
+   const messages=[],pending=read('fixture.exe'),reply=(id,result)=>messages.push({id,result}),account=email=>({account:{type:'chatgpt',email,planType:'pro'}})
    reply(1,{});reply(2,account('PRIVATE-A'));reply(3,{rateLimits:{primary:{usedPercent:35}}})
-   if(scenario==='error')child.stdout.write(JSON.stringify({id:4,error:{message:'PRIVATE'}})+'\n')
+   if(scenario==='error')messages.push({id:4,error:{message:'PRIVATE'}})
    else if(scenario!=='premature')reply(4,scenario==='logout'?{account:null}:account(scenario==='changed'?'PRIVATE-B':scenario==='email-null'?null:'PRIVATE-A'))
-   if(scenario==='event')child.stdout.write(JSON.stringify({method:'account/updated'})+'\n')
+   if(scenario==='event')messages.push({method:'account/updated'})
+   child.stdout.write(messages.map(message=>JSON.stringify(message)).join('\n')+'\n')
+   let published=false;void pending.then(()=>published=true);await Promise.resolve();assert.equal(published,false,'Neither transport may publish before normal close')
    child.emit('close',scenario==='abnormal'?1:0)
    const result=await pending
    if(scenario.startsWith('verified')){assert.equal(result.windows[0].usedPercent,35);assert(result.validUntil>Date.now()&&result.validUntil<=Date.now()+30000);assert(!/PRIVATE|email|planType/.test(JSON.stringify(result)));if(priorGeneration)assert.notEqual(priorGeneration,result.generation);priorGeneration=result.generation}else assert.equal(result,undefined)

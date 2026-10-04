@@ -1,5 +1,7 @@
 # 项目状态
 
+2026-10-04 优先修复记录：[QUOTA_CLOSE_FAILURE_FIX.md](QUOTA_CLOSE_FAILURE_FIX.md)。proxy/stdin 全部等待正常关闭后发布；刷新 401/503/断网立即清额度与代际、保留历史用量。六组生产失败回归通过，工作区全量 build 成功，1165 passed / 1 既有 skip。Claude 接入代码独立开发，不混入此修复提交。
+
 最新阶段已接入真实 Codex 有界额度：[CODEX_QUOTA_LIVE_HANDOFF.md](CODEX_QUOTA_LIVE_HANDOFF.md)。后续审查认可纯内存账号前后比较，不再因缺稳定 accountID 永久未知；427 ms 实测两个 available 窗口，30 秒 TTL / 15 秒重验，原身份不输出或持久化。全量 build 成功，1163 passed / 1 既有 skip / 0 failed。SQLite OS 锁崩溃自动释放，同毫秒空快照优先、合法 map 不受未用 legacy 字段影响。下方结论为历史阶段，具体限制和最终验证以最新交接为准。
 
 固定提交 af92b55 的实际 RPC/真实双进程活锁与崩溃恢复回归全部通过；正式 API/生产页面已显示真实 Codex 额度并在 24 秒内重验。HUD29708、Dashboard49812/3847 恢复，主屏偏好不变；16 组布局、4 组 hover、2 组真实原生窗口检查通过，物理输入仍未测。最终证据在仓库外 subscription-rings 的 live-* 与 account-live-* 文件。

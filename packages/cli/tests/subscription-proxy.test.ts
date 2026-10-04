@@ -19,7 +19,7 @@ function success(child: ReturnType<typeof proxy>, before = account(), after = be
 describe('bounded official account quota connection', () => {
   beforeEach(() => vi.clearAllMocks())
   it('verifies the same account before and after quota without returning identity, retaining only an opaque generation and TTL', async () => {
-    const child = proxy(), result = readCodexProxy('official-codex.exe'); success(child)
+    const child = proxy(), result = readCodexProxy('official-codex.exe'); success(child); child.emit('close', 0)
     const value = await result
     expect(mocks.spawn).toHaveBeenCalledWith('official-codex.exe', ['app-server', 'proxy'], expect.objectContaining({ windowsHide: true }))
     const requests = child.stdin.read()?.toString().trim().split('\n').map((line: string) => JSON.parse(line))
@@ -32,7 +32,7 @@ describe('bounded official account quota connection', () => {
     expect(JSON.stringify(value)).not.toMatch(/PRIVATE|email|planType|credentials/)
   })
   it.each([account('PRIVATE_B@example.invalid'), account(null), account(''), account('PRIVATE_A@example.invalid', 'plus'), { account: null }])('rejects changed or unconfirmed account %s', async after => {
-    const child = proxy(), result = readCodexProxy('official-codex.exe'); success(child, account(), after)
+    const child = proxy(), result = readCodexProxy('official-codex.exe'); success(child, account(), after); child.emit('close', 0)
     expect(await result).toBeUndefined()
   })
   it.each(['account/updated', 'account/login/completed', 'account/chatgptAuthTokens/refresh'])('invalidates on %s, including an event after the quota response', async method => {
@@ -57,7 +57,20 @@ describe('bounded official account quota connection', () => {
       else if (kind === 'oversized') child.stdout.write('x'.repeat(1024 * 1024 + 1))
       else if (kind === 'error') child.stdout.write(JSON.stringify({ id: 1, error: { message: 'PRIVATE' } }) + '\n')
       else child.emit('close', 0)
+      if (kind !== 'close') child.emit('close', 0)
       expect(await result).toBeUndefined()
+    }
+  })
+  it.each([readCodexProxy, readCodexStdio])('waits for normal close and rejects same-batch logout or abnormal closure', async read => {
+    for (const failure of ['logout', 'abnormal']) {
+      const child = proxy(), pending = read('fixture.exe')
+      const messages: any[] = [{ id: 1, result: {} }, { id: 2, result: account() }, { id: 3, result: { rateLimits: { primary: { usedPercent: 35 } } } }, { id: 4, result: account() }]
+      if (failure === 'logout') messages.push({ method: 'account/updated', params: { authMode: null } })
+      child.stdout.write(messages.map(message => JSON.stringify(message)).join('\n') + '\n')
+      let resolved = false; void pending.then(() => resolved = true); await Promise.resolve()
+      expect(resolved).toBe(false)
+      child.emit('close', failure === 'abnormal' ? 1 : 0)
+      expect(await pending).toBeUndefined()
     }
   })
 })

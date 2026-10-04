@@ -29,7 +29,7 @@ export function readCodexSubscriptions(): Promise<ToolSubscription | undefined> 
   return pending
 }
 export function readCodexProxy(executable: string): Promise<ToolSubscription | undefined> {
-  return readCodexRpc(executable, ['app-server', 'proxy'], 2500, false)
+  return readCodexRpc(executable, ['app-server', 'proxy'], 2500, true)
 }
 export function readCodexStdio(executable: string): Promise<ToolSubscription | undefined> {
   return readCodexRpc(executable, ['app-server', '--listen', 'stdio://', '-c', 'analytics.enabled=false'], 5000, true)

@@ -1,5 +1,37 @@
 # Google Drive 本地用量文件夹同步
 
+## 1e158f5 审查后的限制与修复
+
+旧版不放行真实同步。私人数据库现在按创建控制器时与启用时的 realpath 保护真实私人目录、状态目录及其祖先/子目录；数据库经 junction 打开也不能把云根选到它所在目录。Windows 发布由 PowerShell/.NET 调用系统 NtCreateFile 的 RootDirectory 相对创建，并由 NtSetInformationFile 的 RootDirectory 相对重命名，flush/失败清理也通过文件句柄执行。Node 不再对目录字符串写临时文件；辅助进程死亡后也不按路径降级写入。句柄不支持/被占用/重定向会明确拒绝；没有安装软件或修改安全配置。
+
+**macOS/Linux 自动文件夹同步目前明确拒绝启用**：本仓库尚无经验证的安全目录句柄发布适配器。本机无界面 parse、手动 metadata JSON/JSONL 仍可用。下文 Mac 的 folder-sync --enable/--watch 命令是功能恢复后的目标流程，当前不能当作已可部署步骤。此限制不是真实 Mac 测试结论，也没有在 Mac 上执行。真实 Google Drive 的文件系统是否支持 Windows 原生句柄发布仍需用户验收，不能用隔离 NTFS 成功代替。
+
+Mac 当前可运行的本机采集命令（真实 Mac 未测）：
+
+```sh
+pnpm --filter @juliantanx/aiusage... install --frozen-lockfile
+pnpm build:collector
+node packages/cli/dist-collector/index.js parse --tool codex --no-progress
+node packages/cli/dist-collector/index.js parse --tool claude-code --no-progress
+```
+
+手动导出仍按 LOCAL_DEVICE_TRANSFER：仅构建 core/web/CLI、运行无浏览器的 loopback serve，再使用本机 metadata export/export-jobs；不必构建或启动 Electron。`folder-sync --status` 可看本机配置；macOS/Linux 的 `--enable` 会明确失败，不建立自动传输任务。
+
+Mac 当前可运行的本机采集命令（真实 Mac 未测）：
+
+```sh
+pnpm --filter @juliantanx/aiusage... install --frozen-lockfile
+pnpm build:collector
+node packages/cli/dist-collector/index.js parse --tool codex --no-progress
+node packages/cli/dist-collector/index.js parse --tool claude-code --no-progress
+```
+
+手动导出仍按 LOCAL_DEVICE_TRANSFER：仅构建 core/web/CLI、运行无浏览器的 loopback serve，再使用本机 metadata export/export-jobs；不必构建或启动 Electron。`folder-sync --status` 可看本机配置；macOS/Linux 的 `--enable` 会明确失败，不建立自动传输任务。
+
+本机身份索引用 records 身份变更触发器的独立 revision，不被收据/checkpoint/pricing 写入失效。自动同步以1000条分页、每轮最多50页、30秒预算准备索引，异步页间可取消并续扫；准备未完成时本轮不导入/发布。旧显式手动 import 保持同步接口，首次索引建立仍可能较慢，该限制不被自动同步复用。百万合成记录的取消/控制器停止有专门测试，不能替代真实 provider parser 的可中断性。
+
+Windows API 依据：[NtCreateFile](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)、[FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)。原子文件发布的安全边界来自目录/文件句柄绑定，不来自重复 realpath。
+
 只实现用户明确选择的本地文件夹传输，不调用 Google 账号 API、不修改 Drive 配置，不复制 SQLite、state.json、原始日志或认证。默认关闭。真实 Google Drive 目录、Mac 和另一台 Windows 未由代理访问；用户报告三机 hello 文件一致，只证明媒介可用。
 
 ## 各机准备与目录

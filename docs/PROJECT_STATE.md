@@ -1,5 +1,28 @@
 # 项目状态
 
+## 2026-10-04：1e158f5 独立审查修复，等待再次审查
+
+Implemented:
+修复私人 SQLite 经 junction 打开时的路径保护绕过：记录原始 DB 实际目录，并在启用/周期检查当前 DB 与状态目录的真实路径，拒绝重叠私人目录及其祖先/子目录。Windows 发布移到 directory-guard：本机系统 PowerShell/.NET 调用 NtCreateFile/NtSetInformationFile，以同一个原生目录句柄相对创建/写入/flush/rename，并按文件句柄清理失败临时文件。Node 不再使用可能被替换的路径写临时文件，辅助进程退出时也没有路径写入降级。
+
+索引修复：使用只跟踪 records 身份变化的 SQLite revision，不随 metadata/收据/checkpoint 写入失效；自动同步每次准备最多50×1000条、有30秒预算、页间yield/取消/续扫。自动 import 只接受已准备且 revision 匹配的索引，准备后若外部 parser 改了身份就拒绝本轮导入，禁止退回同步全历史重建。显式手动大历史 import 接口保留原行为。页首隐私文案修正，不再在启用后声称“未配置云传输”。
+
+Not completed:
+本轮待父任务独立再次审查，仍不放行真实同步。macOS/Linux 没有经验证的安全目录句柄适配器，自动文件夹同步明确拒绝启用；本机无界面 parse 和手动 metadata 仍保留。原三机自动同步目标因此尚未全部完成。真实 Google Drive 文件系统兼容、两 Windows/Mac 部署、后台安装及真实用量验收均未做。单次 provider parser 和首次显式手动 import 仍无法抢占；完全克隆身份的旧限制继续披露。没有访问任何真实 Drive 路径/别机，没有 push 或改安全配置。
+
+Files changed:
+CLI directory-guard、folder-sync、usage 身份索引；新 directory-guard/local-identity-budget 测试与既有同步 fixtures；web control-translations；生产 UI 验证增加页首文案断言；SYNC_SETUP/ARCHITECTURE/PROJECT_STATE/HANDOFF/LOCAL_DEVICE_TRANSFER 更新限制。未改 provider parser、HUD 动画、费用映射或 Claude 接入。
+
+Tests:
+修复过程定向测试通过：原17项同步及原有 metadata/大历史共29项；原生目录保护4项；索引/停止2项。5000本机记录+3批接收，只建一次索引，另一连接插入本机记录能失效，收据与检查点不能失效。100万条合成记录：取消4ms、控制器stop/drain 7ms，每页1000条，恢复后索引3000条，没有发布文件。该时间仅本机合成基准，不保证所有磁盘相同。原生目录/祖先rename注入在本机被拒绝（ancestorSwapExecuted=false），外侧目录0临时文件；同名目标保持不可变，失败临时文件清理验证通过。不能声称成功执行了祖先替换。
+
+本轮全量build/collector build/CLI tsc通过；全量test 1205 passed/1既有skip/0failed，136 files。生产UI三节点600/600/600、启用/暂停/恢复、Origin403及隐私边界通过，0pageerrors，截图已目视，启用后页首文案正确。固定本地提交后的复跑结果见最终报告及忽略的 .tmp/folder-sync-review-evidence/result.json，私人合成运行数据在Temp，不入Git；旧1e158f5的1199测试和Mac可用结论以本节修正。没有新增skip来屏蔽平台缺口。
+
+Three highest-priority manual tests:
+1. 父任务对新固定提交重跑P1/P2边界和大历史停止审查，通过之前不配置真实同步目录。
+2. 获准后用户在两Windows正常权限下验证实际Drive文件系统原生句柄兼容、离线/并发/暂停恢复；不绕过此前Access denied。
+3. Mac继续独立本机采集/手动metadata；安全发布适配器另待明确授权与真实Mac验收，不按旧watch步骤启用自动写入。
+
 ## 2026-10-04：自动用量文件夹同步，本地验证完成
 
 Implemented:

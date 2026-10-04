@@ -9,9 +9,8 @@ import { buildUsageRings, type DeviceUsageOrigin, type UsagePeriod } from '@aius
 const hash = (namespace: string, value: string) => createHash('sha256').update(`${namespace}\0${value}`).digest('hex')
 export const deviceKeyFor = (id: string) => hash('device', id)
 const projection = 'id, ts, updated_at, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source, session_id, cwd, device_instance_id, platform'
-const identityCaches = new WeakMap<Database.Database, { currentId: string; changes: number; version: number }>()
-const changes = (db: Database.Database) => (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n
-const version = (db: Database.Database) => db.pragma('data_version', { simple: true }) as number
+const identityCaches = new WeakMap<Database.Database, { currentId: string; revision: number; cursor: number; complete: boolean }>()
+const revision = (db: Database.Database) => (db.prepare('SELECT revision FROM hud_usage_local_revision WHERE id=1').get() as {revision:number}).revision
 const projectPathKey = (value: string) => /^[a-z]:|\\/.test(value.toLowerCase()) ? value.replaceAll('\\', '/').toLowerCase().replace(/\/+$/, '') : value.replace(/\/+$/, '')
 function localRow(row: any, currentId: string, pricing?: (model: string) => PriceEntry | undefined, exchangeRate?: number): UsageMetadataRecord {
   const deviceId = !row.device_instance_id || row.device_instance_id === 'unknown' ? currentId : row.device_instance_id
@@ -34,7 +33,18 @@ function localRow(row: any, currentId: string, pricing?: (model: string) => Pric
   return record
 }
 export class UsageMetadataStore {
-  constructor(private db: Database.Database, private currentId: string) {}
+  constructor(private db: Database.Database, private currentId: string) {
+    // Receipt/checkpoint/pricing writes cannot invalidate local record identities.
+    db.exec(`CREATE TABLE IF NOT EXISTS hud_usage_local_revision(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
+      INSERT OR IGNORE INTO hud_usage_local_revision VALUES(1,0);
+      CREATE TRIGGER IF NOT EXISTS hud_local_identity_insert AFTER INSERT ON records WHEN NEW.origin='local'
+      BEGIN UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1; END;
+      CREATE TRIGGER IF NOT EXISTS hud_local_identity_delete AFTER DELETE ON records WHEN OLD.origin='local'
+      BEGIN UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1; END;
+      CREATE TRIGGER IF NOT EXISTS hud_local_identity_update AFTER UPDATE OF id,device_instance_id,origin ON records
+      WHEN (OLD.origin='local' OR NEW.origin='local') AND (OLD.id IS NOT NEW.id OR OLD.device_instance_id IS NOT NEW.device_instance_id OR OLD.origin IS NOT NEW.origin)
+      BEGIN UPDATE hud_usage_local_revision SET revision=revision+1 WHERE id=1; END;`)
+  }
   projectKeyFor(cwd: string): string { return hash('project', `${deviceKeyFor(this.currentId)}\0${projectPathKey(cwd)}`) }
   /** Automatic transport excludes imported and foreign-device rows. Rolling rowid
    * reconciliation detects old corrections even when updated_at was not bumped. */
@@ -127,29 +137,47 @@ export class UsageMetadataStore {
     try { return validateUsageTransfer({ format: 'ai-dev-hud-usage', version: 1, exportedAt, records }) }
     catch { throw new LocalControlError('Some local records need normalized usage values before export', 409) }
   }
-  /** Cache invalidates on parser writes, external DB writes or device changes, not each imported chunk. */
-  private localIdentityIndex() {
+  /** Identity-only revision is maintained by SQLite triggers across connections. */
+  private identityPage() {
     const cached = identityCaches.get(this.db)
-    if (cached?.currentId === this.currentId && cached.changes === changes(this.db) && cached.version === version(this.db)) return
-    if (this.db.pragma('temp_store', { simple: true }) !== 1) this.db.pragma('temp_store = FILE')
-    this.db.exec('CREATE TEMP TABLE IF NOT EXISTS hud_local_identity(device_key TEXT, record_key TEXT, PRIMARY KEY(device_key,record_key)) WITHOUT ROWID; DELETE FROM hud_local_identity')
+    const currentRevision = revision(this.db)
+    let index = cached
+    if (cached?.currentId !== this.currentId || cached.revision !== currentRevision) {
+      if (this.db.pragma('temp_store', { simple: true }) !== 1) this.db.pragma('temp_store = FILE')
+      this.db.exec('DROP TABLE IF EXISTS temp.hud_local_identity; CREATE TEMP TABLE hud_local_identity(device_key TEXT, record_key TEXT, PRIMARY KEY(device_key,record_key)) WITHOUT ROWID')
+      index = { currentId: this.currentId, revision: currentRevision, cursor: 0, complete: false }
+      identityCaches.set(this.db, index)
+    }
+    if (index!.complete) return true
     const select = this.db.prepare(`SELECT rowid AS cursor, id, device_instance_id FROM records WHERE ${LOCAL_RECORDS_WHERE} AND rowid>? ORDER BY rowid LIMIT 1000`)
     const put = this.db.prepare('INSERT OR IGNORE INTO hud_local_identity VALUES (?,?)')
     this.db.transaction(() => {
-      let cursor = 0
-      while (true) {
-        const rows = select.all(cursor) as Array<{ cursor: number; id: string; device_instance_id: string }>
-        if (!rows.length) break
+        const rows = select.all(index!.cursor) as Array<{ cursor: number; id: string; device_instance_id: string }>
         for (const row of rows) { const device = deviceKeyFor(!row.device_instance_id || row.device_instance_id === 'unknown' ? this.currentId : row.device_instance_id); put.run(device, hash('record', `${device}\0${row.id}`)) }
-        cursor = rows.at(-1)!.cursor
-      }
+        index!.cursor = rows.at(-1)?.cursor ?? index!.cursor
+        index!.complete = rows.length < 1000
     })()
-    identityCaches.set(this.db, { currentId: this.currentId, changes: changes(this.db), version: version(this.db) })
+    return index!.complete
   }
-  import(value: unknown): MetadataImportResult {
+  /** Automatic imports prepare in bounded pages before entering synchronous
+   * import transactions. A cancelled/expired build resumes at its saved cursor. */
+  async prepareLocalIdentityIndex(alive: () => boolean, deadline: number, maximumPages = 50): Promise<boolean> {
+    for (let page = 0; page < maximumPages && alive() && Date.now() < deadline; page++) {
+      if (this.identityPage()) return true
+      await new Promise<void>(resolve => setImmediate(resolve))
+    }
+    return false
+  }
+  private localIdentityIndex() {
+    while (!this.identityPage()) { /* Legacy explicit import stays synchronous. */ }
+  }
+  import(value: unknown, preparedOnly = false): MetadataImportResult {
     let transfer: UsageMetadataTransfer
     try { transfer = validateUsageTransfer(value) } catch { throw new LocalControlError('Invalid version 1 usage metadata or non-allowlisted fields') }
-    this.localIdentityIndex()
+    if (preparedOnly) {
+      const cached = identityCaches.get(this.db)
+      if (!cached?.complete || cached.currentId !== this.currentId || cached.revision !== revision(this.db)) throw new LocalControlError('本机记录身份已变化；本轮不重建全历史索引，下一轮分页续扫后重试', 409)
+    } else this.localIdentityIndex()
     const local = this.db.prepare('SELECT 1 FROM hud_local_identity WHERE device_key=? AND record_key=?')
     const result = this.db.transaction(() => {
       this.db.exec('CREATE TABLE IF NOT EXISTS hud_usage_metadata (device_key TEXT NOT NULL, record_key TEXT NOT NULL, updated_at INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(device_key, record_key))')
@@ -175,7 +203,6 @@ export class UsageMetadataStore {
       for (const key of received) receipt.run(key, receivedAt)
       return result
     })()
-    identityCaches.set(this.db, { currentId: this.currentId, changes: changes(this.db), version: version(this.db) })
     return result
   }
 }

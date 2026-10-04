@@ -38,6 +38,7 @@ async function run() {
   const totals=[]
   for(const n of profiles) {const data=await request(n.port,'usage?period=lifetime'); totals.push(data.selected.tokens);assert.equal(data.selected.tokens,600);assert.equal(data.rings.devices.length,3)}
   await page.reload(); await until(async()=> (await page.getByTestId('usage-lifetime').innerText()).includes('600'))
+  assert(!(await page.locator('.page-header').innerText()).includes('未配置云传输'))
   await wait(600)
   await page.screenshot({path:path.join(evidence,'folder-sync-production.png'),fullPage:true})
   const before=fs.readdirSync(shared).length; await request(profiles[0].port,'folder-sync/run',{}); assert.equal(fs.readdirSync(shared).length,before)

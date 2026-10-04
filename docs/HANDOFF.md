@@ -1,5 +1,20 @@
 # AI Dev HUD 项目交接：工具套餐同心环与独立详情
 
+## 最新：1e158f5 的 1P1+2P2 修复，仍等待复审
+
+Implemented: 私人DB/状态目录以真实路径保护，含经junction打开的DB；Windows外部发布使用原生目录/文件句柄相对操作，无按路径写入降级；本机身份索引仅由records身份revision失效，自动准备分页/预算/取消/续扫，导入期间identity变化不回落到同步全扫。页首启用后文案已修正。
+
+Not completed: **不放行真实同步**，等待父任务独立复审；macOS/Linux的自动目录写入因安全适配器缺失明确拒绝，三机自动目标未全部完成。未触真实Drive/别机/安装持久任务/上传私人数据/改变权限或push。Mac本机parse和既有手动metadata保持可用；参考SYNC_SETUP顶部新限制，旧说明不能作为当前Mac自动部署步骤。
+
+Files changed: directory-guard/folder-sync/usage；4原生测试+2索引基准，既有fixture和生产UI文案断言；control-translations及中文架构/设置/状态/交接。原provider/HUD/Claude保持原实现。
+
+Tests: 5000+3批只建一次索引；百万合成历史取消4ms、控制器停止7ms并可续扫，未发布。目录及祖先替换注入被系统拒绝，不能声称替换已执行；outside temp为0。同名不可变与失败清理通过。全量build/collector/CLI类型通过，1205 passed/1既有skip/0failed，136 files；生产UI三节点600/600/600、页首文案、启用暂停恢复、隐私/Origin403及0pageerrors，截图已看。固定本地提交后复跑结果以最终日志为准，证据 .tmp/folder-sync-review-evidence/result.json 和Temp合成UI。
+
+Three highest-priority manual tests:
+1. 父任务固定新commit审查P1/P2及大历史响应，未通过前不用真实路径。
+2. 获准后两Windows由用户测试实际Drive原生句柄兼容、离线/并发/暂停，不绕过权限。
+3. Mac只parse/手动metadata；安全适配器及真实部署需后续明确授权。
+
 ## 最新阶段：自动用量文件夹同步（2026-10-04）
 
 Implemented: 已完成本地文件夹同步 MVP：默认关闭、用户选目录启用、原子 metadata JSONL、本机独立身份/修订/收据/轮转检查点、60秒周期及退避、Windows 网页状态/控制、Mac 独立 collector。复用既有 typed parser/storage/API，HUD不改动画，Cursor保持现状。实际运行步骤、边界与未测项目见 [SYNC_SETUP.md](SYNC_SETUP.md)。

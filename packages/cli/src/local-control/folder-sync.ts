@@ -1,5 +1,5 @@
-import { constants, readFileSync } from 'node:fs'
-import { lstat, realpath, open, rename, unlink, opendir } from 'node:fs/promises'
+import { constants, readFileSync, realpathSync } from 'node:fs'
+import { lstat, realpath, open, opendir } from 'node:fs/promises'
 import path from 'node:path'
 import { hostname, homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -9,6 +9,8 @@ import { validateUsageChunkLine, validateUsageTransfer, USAGE_CHUNK_LINE_BYTES, 
 import type { FolderSyncStatus } from '@aiusage/core'
 import { UsageMetadataStore, deviceKeyFor } from './usage.js'
 import { LocalControlError } from './projects.js'
+import { AIUSAGE_DIR } from '../config.js'
+import { lockSyncDirectory, type DirectoryLease } from './directory-guard.js'
 
 const digest = (s: string | Buffer) => createHash('sha256').update(s).digest('hex')
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -32,6 +34,7 @@ interface Options {
   runWrite?: <T>(work: () => Promise<T>) => Promise<T>
   /** Injectable only for deterministic isolated tests; never sent over transport. */
   binding?: string
+  privateStateDirectory?: string
 }
 /** Reject redirected ancestors, including Windows junctions, before any folder I/O. */
 export async function safeSyncDirectory(input: string): Promise<string> {
@@ -78,8 +81,10 @@ export class FolderSyncController {
   private state: FolderSyncStatus
   private store: UsageMetadataStore
   private binding: string
+  private originalDbDirectory?: string
   constructor(private options: Options) {
     const db = options.db
+    if (db.name && db.name !== ':memory:') this.originalDbDirectory = path.dirname(realpathSync(db.name))
     db.exec(`CREATE TABLE IF NOT EXISTS hud_folder_sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS hud_folder_sync_exports (target TEXT, record_key TEXT, digest TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(target,record_key));
       CREATE TABLE IF NOT EXISTS hud_folder_sync_receipts (target TEXT, name TEXT, digest TEXT NOT NULL, PRIMARY KEY(target,name));
@@ -107,6 +112,28 @@ export class FolderSyncController {
   private identity() {
     if (this.settings.binding !== this.binding || this.settings.deviceKey !== deviceKeyFor(this.options.deviceId)) throw new LocalControlError('检测到复制的本机身份；请在该机器使用独立本地数据目录，禁止复制 state.json 或 cache.db', 409)
   }
+  private async protectPrivateDirectories(directory: string) {
+    const protectedPaths = new Set<string>()
+    if (this.originalDbDirectory) {
+      protectedPaths.add(this.originalDbDirectory)
+      protectedPaths.add(path.dirname(await realpath(this.options.db.name)))
+    }
+    // Resolve redirected state-directory ancestors even when the final state
+    // directory does not exist yet. Never broaden the selected cloud root.
+    let candidate = path.resolve(this.options.privateStateDirectory ?? AIUSAGE_DIR), suffix: string[] = []
+    while (true) {
+      try { protectedPaths.add(path.join(await realpath(candidate), ...suffix)); break }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || path.dirname(candidate) === candidate) throw new LocalControlError('无法确认私人状态目录真实边界；拒绝同步', 409)
+        suffix.unshift(path.basename(candidate)); candidate = path.dirname(candidate)
+      }
+    }
+    const contains = (parent: string, child: string) => {
+      const relative = path.relative(parent, child)
+      return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+    }
+    for (const privatePath of protectedPaths) if (contains(directory, privatePath) || contains(privatePath, directory)) throw new LocalControlError('同步目录不能包含或位于私人 SQLite/状态目录及其祖先；请选择独立同步文件夹', 409)
+  }
   async configure(directory: unknown, enabled: unknown, confirm: unknown): Promise<FolderSyncStatus> {
     if (typeof enabled !== 'boolean' || (enabled && confirm !== true)) throw new LocalControlError('启用需要明确选择目录并确认只同步脱敏用量')
     if (!enabled) {
@@ -118,10 +145,9 @@ export class FolderSyncController {
     this.identity()
     if (typeof directory !== 'string' || !directory) throw new LocalControlError('请选择同步目录')
     const canonical = await safeSyncDirectory(directory)
-    if (this.options.db.name && this.options.db.name !== ':memory:') {
-      const relative = path.relative(canonical, path.resolve(this.options.db.name))
-      if (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)) throw new LocalControlError('同步目录不能包含本机私人 SQLite；请选择独立的空同步文件夹')
-    }
+    await this.protectPrivateDirectories(canonical)
+    const checked = await lockSyncDirectory(canonical)
+    try { await this.protectPrivateDirectories(canonical) } finally { await checked.release() }
     this.epoch++; this.clearTimer()
     if (this.active) await this.active
     this.settings.directory = canonical; this.settings.enabled = true; this.stopped = false
@@ -153,7 +179,8 @@ export class FolderSyncController {
     return this.active
   }
   private async cycle(epoch: number): Promise<FolderSyncStatus> {
-    const alive = () => { this.refreshSettings(); return this.epoch === epoch && this.settings.enabled && !this.stopped }
+    let directoryLease: DirectoryLease | undefined
+    const alive = () => { this.refreshSettings(); return this.epoch === epoch && this.settings.enabled && !this.stopped && (directoryLease === undefined || directoryLease.alive) }
     this.state.running = true; this.state.error = null; this.state.issues = []; this.state.published = 0; this.state.imported = 0
     let leased = false
     const issue = (s: string) => { if (this.state.issues.length < 20) this.state.issues.push(s) }
@@ -167,11 +194,19 @@ export class FolderSyncController {
       })()
       if (!leased) throw new LocalControlError('另一进程正在同步，稍后自动重试')
       const directory = await safeSyncDirectory(this.settings.directory!)
+      await this.protectPrivateDirectories(directory)
       // Parser is existing incremental ingestion. Failure never publishes a success.
       const collected = await this.options.collect?.() as { errors?: string[] } | undefined
       if (collected?.errors?.length) throw new LocalControlError('本机采集报告错误；请检查本地来源后重试')
       if (!alive()) return this.status()
       const deadline = Date.now() + CYCLE_MS
+      if (!await this.store.prepareLocalIdentityIndex(alive, deadline)) {
+        if (alive()) issue('本机身份索引准备中，下一轮续扫；本轮未合并或发布')
+        return this.status()
+      }
+      if (!alive()) return this.status()
+      directoryLease = await lockSyncDirectory(directory)
+      await this.protectPrivateDirectories(directory)
       const names: string[] = []; let entries = 0
       const dir = await opendir(directory)
       for await (const entry of dir) {
@@ -220,13 +255,13 @@ export class FolderSyncController {
           if (!alive()) break
           this.options.db.transaction(() => {
             for (const chunk of chunks) {
-              const result = this.store.import(chunk)
+              const result = this.store.import(chunk, true)
               if (result.conflicts) issue('发现同版本用量冲突；保留已有记录和源文件')
               this.state.imported += result.added + result.updated
             }
             saveReceipt.run(directory, name, hash); seen.run(directory, match[1], match[2], Date.now())
           })()
-        } catch { issue('某批次未下载、损坏、被修改或身份冲突；保留原文件并在补扫时重试') }
+        } catch (error) { issue(error instanceof LocalControlError ? error.message : '某批次未下载、损坏、被修改或身份冲突；保留原文件并在补扫时重试') }
       }
       const ledger = this.options.db.prepare('SELECT digest, revision FROM hud_folder_sync_exports WHERE target=? AND record_key=?')
       const save = this.options.db.prepare('INSERT INTO hud_folder_sync_exports VALUES (?,?,?,?) ON CONFLICT(target,record_key) DO UPDATE SET digest=excluded.digest, revision=excluded.revision')
@@ -239,7 +274,7 @@ export class FolderSyncController {
           // pricing projection did not change the source updated_at timestamp.
           const revised = changed.map(r => ({ ...r, updatedAt: Math.max(r.updatedAt, Date.now(), ((ledger.get(directory, r.recordKey) as { revision: number } | undefined)?.revision ?? 0) + 1) }))
           const transfer = validateUsageTransfer({ format: 'ai-dev-hud-usage', version: 1, exportedAt: Date.now(), records: revised })
-          await this.publish(directory, transfer, alive)
+          await this.publish(directoryLease, transfer, alive)
           if (!alive()) break
           this.options.db.transaction(() => { changed.forEach((r,i) => save.run(directory, r.recordKey, digest(JSON.stringify(r)), revised[i].updatedAt)) })()
           this.state.published += changed.length
@@ -251,7 +286,7 @@ export class FolderSyncController {
       }
       // Empty protocol batch acts as a bounded heartbeat every 15 minutes.
       if (alive() && Date.now() - Number(this.get(`heartbeat:${directory}`) ?? 0) > 15 * 60_000) {
-        await this.publish(directory, { format: 'ai-dev-hud-usage', version: 1, exportedAt: Date.now(), records: [] }, alive)
+        await this.publish(directoryLease, { format: 'ai-dev-hud-usage', version: 1, exportedAt: Date.now(), records: [] }, alive)
         if (alive()) this.put(`heartbeat:${directory}`, String(Date.now()))
       }
       if (alive()) {
@@ -262,30 +297,20 @@ export class FolderSyncController {
       this.failures++
       this.state.error = error instanceof LocalControlError ? error.message : '同步目录不可用或无权限；保持本地数据，稍后自动重试'
     } finally {
+      await directoryLease?.release()
       this.put('error', this.state.error ?? ''); this.put('issues', JSON.stringify(this.state.issues))
       if (leased) this.options.db.transaction(() => { const lease = JSON.parse(this.get('lease') ?? 'null'); if (lease?.owner === this.owner) this.put('lease', 'null') })()
     }
     return this.status()
   }
-  private async publish(directory: string, transfer: UsageMetadataTransfer, alive: () => boolean) {
+  private async publish(lease: DirectoryLease, transfer: UsageMetadataTransfer, alive: () => boolean) {
     const records = transfer.records.length
     const lines = [{ format: 'ai-dev-hud-usage-chunks', version: 1, type: 'header', exportedAt: transfer.exportedAt }, ...(records ? [transfer] : []), { format: 'ai-dev-hud-usage-chunks', version: 1, type: 'complete', chunks: records ? 1 : 0, records }]
     if (lines.some(line => Buffer.byteLength(JSON.stringify(line)) > USAGE_CHUNK_LINE_BYTES)) throw new LocalControlError('导出批次超过大小上限')
-    await safeSyncDirectory(directory)
     const filename = `${this.settings.deviceKey}.${this.settings.writer}.${randomUUID()}.jsonl`
-    const temporary = path.join(directory, `.${filename}.tmp`), final = path.join(directory, filename)
-    const handle = await open(temporary, 'wx', 0o600)
-    let published = false
-    try {
-      await handle.writeFile(lines.map(line => JSON.stringify(line)).join('\n') + '\n', 'utf8')
-      await handle.sync(); await handle.close()
-      await safeSyncDirectory(directory)
-      if (!alive()) return
-      await rename(temporary, final); published = true
-    } finally {
-      await handle.close().catch(() => {})
-      // Only our uncommitted temp file may be removed, and only in the validated root.
-      if (!published) { try { await safeSyncDirectory(directory); await unlink(temporary) } catch {} }
-    }
+    if (!alive()) return
+    // Publication executes in the process owning native directory locks. If that
+    // process dies, no Node path-based fallback can write after locks disappear.
+    await lease.publish(filename, lines.map(line => JSON.stringify(line)).join('\n') + '\n')
   }
 }

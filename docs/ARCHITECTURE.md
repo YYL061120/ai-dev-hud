@@ -2,6 +2,8 @@
 
 ## 本地文件夹同步（2026-10-04）
 
+审查修复：私人 DB/状态目录使用真实路径保护；Windows directory-guard 将所有外部批次写入/flush/rename/失败清理绑定原生句柄，禁止按路径降级。macOS/Linux 在安全适配器未实现前明确拒绝启用自动同步。usage 本机身份索引改为仅 records 身份变更的 SQLite revision，自动链路有可取消的分页准备与续扫，收据/检查点不触发重建。详情和当前部署限制见 SYNC_SETUP 顶部。
+
 CLI `local-control/folder-sync.ts` 为独立文件系统 transport/controller，复用 `UsageMetadataStore.localSyncPage()` 本机 allowlist 投影及 `import()` 事务，provider parser 不变。私人 SQLite 保存配置/摘要/修订/收据/轮转检查点/进程 lease。core `FolderSyncStatus` 为有类型本地 DTO；web 只调用 loopback、Origin 和既有认证保护的 API，不读日志/DB。serve 将采集与合并放入既有写队列，HUD 继续读取既有 rings API。独立 `dist-collector` 提供无 Electron 的 Codex/Claude `folder-sync --watch`。
 
 外部目录只写 version 1 usage JSONL 不可变原子批次和空心跳，不传 config/state/SQLite/账号观察。单调修订捕获历史更正，不重新导出他机。启用须用户明确选目录，默认关闭，暂停持久化。未调用 Drive 云 API、安装后台任务或访问真实 Drive；上限、恢复、克隆边界及 Mac 未测见 [SYNC_SETUP.md](SYNC_SETUP.md)。

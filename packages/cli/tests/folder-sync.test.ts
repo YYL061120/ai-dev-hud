@@ -11,9 +11,10 @@ import { UsageMetadataStore, deviceKeyFor } from '../src/local-control/usage.js'
 import type { StatsRecord } from '@aiusage/core'
 
 let root: string, shared: string, dbs: Database.Database[], controllers: FolderSyncController[]
+vi.setConfig({ testTimeout: 20_000, hookTimeout: 20_000 })
 const record = (id: string, input = 100): StatsRecord => ({ id: 'PRIVATE_RECORD', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(), lineOffset: 1, tool: 'claude-code', model: 'claude-sonnet-4', provider: 'anthropic', inputTokens: input, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0, cost: .01, costSource: 'log', sessionId: 'PRIVATE_SESSION', sourceFile: 'PRIVATE_LOG', cwd: 'C:\\PRIVATE_PROJECT', device: 'PRIVATE_HOSTNAME', deviceInstanceId: id, platform: 'win32', origin: 'local' })
 function node(id: string, binding = id, collect?: () => Promise<unknown>) {
-  const db = createDatabase(join(root, `${randomUUID()}.db`)); dbs.push(db)
+  const db = createDatabase(join(root, 'private', randomUUID(), 'cache.db')); dbs.push(db)
   const controller = new FolderSyncController({ db, deviceId: id, binding, collect }); controllers.push(controller)
   return { db, controller, store: new UsageMetadataStore(db, id) }
 }

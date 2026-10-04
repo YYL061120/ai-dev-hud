@@ -68,6 +68,7 @@ export class CodexParser implements Parser {
     const outputTokens = usage.output_tokens ?? 0
     const cacheReadTokens = usage.cached_input_tokens ?? 0
     const thinkingTokens = usage.reasoning_output_tokens ?? 0
+    // Compatibility with local log variants, not a claim about the official API schema.
     const cacheWriteTokens = usage.cache_write_input_tokens ?? 0
 
     const hasPrice = model !== 'unknown' && resolvePrice(model) !== undefined

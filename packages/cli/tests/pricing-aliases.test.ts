@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import { CURATED_PRICE_ALIASES, getBasePriceTable, getUserOverrides, resolvePrice, setRuntimePriceTable } from '@aiusage/core'
 import { initializeDatabase } from '../src/db/index.js'
-import { ensureCuratedPricingAliases, loadPricingRuntime, resolvePriceFromRegistry, setUserPricingAlias } from '../src/pricing-registry.js'
+import { ensureCuratedPricingAliases, listPricingModels, listLocalModelBindings, loadPricingRuntime, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias } from '../src/pricing-registry.js'
+import { insertRecord } from '../src/db/records.js'
 
 describe('curated pricing aliases (issue #69)', () => {
   let db: Database.Database
@@ -39,6 +40,28 @@ describe('curated pricing aliases (issue #69)', () => {
       expect(modelKey.length).toBeGreaterThan(alias.replace(/-(high|low)$/, '').length)
       expect(modelKey.startsWith(alias.replace(/-(high|low)$/, ''))).toBe(true)
     }
+  })
+
+  it('keeps unregistered GPT suffixes unknown across runtime, registry and pricing views, preserving explicit user bindings', () => {
+    const variants = ['gpt-6.1-sol-unpublished', 'gpt-6.1-sol-20990101']
+    for (const model of variants) {
+      insertRecord(db, { id: model, ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(), lineOffset: 0,
+        tool: 'codex', model, provider: 'openai', inputTokens: 100, outputTokens: 10, cacheReadTokens: 0,
+        cacheWriteTokens: 0, thinkingTokens: 0, cost: 0, costSource: 'unknown', sessionId: 'fixture',
+        sourceFile: 'fixture', device: 'fixture', deviceInstanceId: 'fixture' })
+      expect(resolvePriceFromRegistry(db, model)).toBeUndefined()
+      expect(resolvePrice(model)).toBeUndefined()
+      expect(listPricingModels(db).find(row => row.model === model)?.price).toBeNull()
+      expect(listLocalModelBindings(db).find(row => row.model === model)).toMatchObject({ hasPrice: false, bindingType: 'none' })
+    }
+    setUserPricingAlias(db, variants[0], 'gpt-6.1-sol')
+    setUserPrice(db, variants[1], { input: 7, output: 9 })
+    loadPricingRuntime(db)
+    expect(resolvePriceFromRegistry(db, variants[0])).toMatchObject({ input: 2, output: 10 })
+    expect(resolvePrice(variants[0])).toMatchObject({ input: 2, output: 10 })
+    expect(listLocalModelBindings(db).find(row => row.model === variants[0])).toMatchObject({ hasPrice: true, hasManualBinding: true })
+    expect(resolvePriceFromRegistry(db, variants[1])).toMatchObject({ input: 7, output: 9 })
+    expect(resolvePrice(variants[1])).toMatchObject({ input: 7, output: 9 })
   })
 
   it('seeds an alias only once its target price exists, and only once', () => {

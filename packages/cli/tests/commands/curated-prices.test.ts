@@ -46,7 +46,7 @@ describe('curated prices', () => {
     // A registry synced before Opus 5.5 launched: Opus 5 is there, Opus 5.5 is not.
     db.prepare("DELETE FROM model_prices WHERE model_key = 'claude-opus-5-5'").run()
     insertLitellmPrice(db, 'claude-opus-5', 5, 25, 0.5, 6.25)
-    expect(resolvePriceFromRegistry(db, 'claude-opus-5-5')).toMatchObject({ input: 5, output: 25 })
+    expect(resolvePriceFromRegistry(db, 'claude-opus-5-5')).toBeUndefined()
 
     ensureCuratedPrices(db)
 

@@ -5,6 +5,7 @@ import {
   setRuntimePriceTable,
   setPriceOverride,
   resolvePriceFromTable,
+  verifiedPriceModelKey,
   type PriceEntry,
 } from '@aiusage/core'
 import type { Config } from './config.js'
@@ -726,7 +727,7 @@ function findMatch(db: Database.Database, model: string): { price: PriceEntry; r
   let best: ModelPriceRow | null = null
   for (const row of rows) {
     if (model === row.model_key) { best = row; break }
-    if (model.startsWith(row.model_key) && (!best || row.model_key.length > best.model_key.length)) best = row
+    if (verifiedPriceModelKey(model) === row.model_key) best = row
   }
   if (!best) return null
   return { price: rowToPrice(best), row: best, matchedBy: best.model_key === model ? null : best.model_key }
@@ -879,16 +880,16 @@ export function listLocalModelBindings(db: Database.Database): PricingLocalModel
     }
 
     let best: ModelPriceRow | null = null
-    let matchType: 'exact' | 'prefix' | null = null
+    let matchType: 'exact' | 'alias' | null = null
     for (const row of priceRows) {
       if (model === row.model_key) {
         best = row
         matchType = 'exact'
         break
       }
-      if (model.startsWith(row.model_key) && (!best || row.model_key.length > best.model_key.length)) {
+      if (verifiedPriceModelKey(model) === row.model_key) {
         best = row
-        matchType = 'prefix'
+        matchType = 'alias'
       }
     }
 

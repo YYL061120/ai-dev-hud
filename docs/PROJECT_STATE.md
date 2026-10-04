@@ -1,6 +1,23 @@
 # 项目状态
 
-## 2026-10-04 真实故障修复（当前最新）
+## 2026-10-04 独立复核 P2 补修（当前最新）
+
+Implemented: 价格只匹配精确模型、明确登记的 alias/date 与用户显式价格/绑定；删除 core 和 CLI 价格管理视图的任意 startsWith 套价。gpt-6.1-sol-unpublished、gpt-6.1-sol-20990101 均保持未知；保留官方核验的历史 claude-sonnet-4-20250514 日期白名单，不生成其他日期。Codex cache_write_input_tokens 只描述为本地日志兼容字段，不宣称等同官方 API 或已验证官方 Codex 来源。
+
+Not completed: 真实 Claude 仍 waiting-response，未代发消息或改接入；其他日期/新别名须有明确登记，不能自动继承价格。
+
+Files changed: core pricing、Codex 注释；CLI pricing-registry；价格匹配/绑定回归及合成价格 fixture；TODAY_CODEX_COST_FIX 与本页。
+
+Tests: 完整 build 通过；1181 passed / 1 既有 skip / 0 failed，133 files。首次发现 Site 历史日期与 CLI 模型归属 fixture 曾依赖任意前缀；官方核验日期后加入明确白名单，合成归属 fixture 明确注册价格，保留归属/金额断言，未跳过测试。实际构建的未发布/未来日期负例均未知；正式 today 金额仍 $0.1395384。仅重载正式 CLI 为53052，HUD50644保持，Claude仍等待真实输入。
+
+Three highest-priority manual tests:
+1. 未发布后缀/未来日期在价格管理与用量详情都显示未知。
+2. 用户明确绑定或填写该精确模型价格后，价格按显式配置显示。
+3. 今日 Codex 已知金额、Claude 等待输入提示和原 HUD 行为保持；不替用户发送响应。
+
+---
+
+## 2026-10-04 真实故障修复
 
 Implemented: 今日 Codex gpt-6.1-sol 缺价却显示 priced zero 已修，inclusive cache/reasoning 单独计费适配；生产 API 与生产 Web 今日金额 $0.1395384（显示约 $0.1395），auto-review 金额未知。Claude 已启用配置真实核验，尚无 statusline 捕获；桌面后台流式会话与终端接入不匹配是证据最吻合的推断，补齐无需重复启用及终端说明。见 [金额实测报告](TODAY_CODEX_COST_FIX.md)、[Claude 实测诊断](CLAUDE_LIVE_DIAGNOSIS.md)。
 

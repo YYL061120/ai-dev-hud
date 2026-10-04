@@ -5,6 +5,8 @@ const TEST_PRICE_TABLE: Record<string, PriceEntry> = {
   'gemini-3-pro': { input: 2, output: 12, cacheRead: 0.2 },
   'gemini-3.5-flash-high': { input: 0.5, output: 3, cacheRead: 0.05 },
   'gemini-3.8-flash': { input: 0.75, output: 3.75, cacheRead: 0.075 },
+  // Synthetic exact pricing for the executor-model attribution fixture, not a production alias.
+  'gemini-3.8-flash-high': { input: 0.75, output: 3.75, cacheRead: 0.075 },
   'gpt-4o': { input: 2.5, output: 10 },
   'qoder-auto': { input: 2, output: 2, cacheRead: 2, cacheWrite: 2 },
   'qoder-ultimate': { input: 1.6, output: 1.6, cacheRead: 1.6, cacheWrite: 1.6 },

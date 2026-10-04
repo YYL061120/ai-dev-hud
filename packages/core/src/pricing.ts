@@ -130,10 +130,9 @@ const PROVIDER_PREFIXES = [
 ]
 
 /**
- * Resolve price for a model: exact match first, then prefix match.
- * Strips known provider prefixes before matching.
- * e.g. 'claude-haiku-4-5-20251001' matches 'claude-haiku-4-5'
- *      'z-ai/glm-5-20260211' matches 'glm-5'
+ * Resolve exact model keys (including explicitly registered aliases/revisions).
+ * Strip known provider namespaces only; an arbitrary model/date suffix never
+ * proves that the base model price applies. Hosts supply verified alias keys.
  */
 export function resolvePrice(model: string): PriceEntry | undefined {
   if (resolvedPriceCache.has(model)) return resolvedPriceCache.get(model)
@@ -143,6 +142,13 @@ export function resolvePrice(model: string): PriceEntry | undefined {
 }
 
 export { resolvePriceFromTable }
+
+// Verified 2026-10-04 from Anthropic's model-deprecations reference:
+// https://platform.claude.com/docs/en/about-claude/model-deprecations
+// Preserve this known historical snapshot; do not synthesize other date variants.
+export function verifiedPriceModelKey(model: string): string {
+  return model === 'claude-sonnet-4-20250514' ? 'claude-sonnet-4' : model
+}
 
 function resolvePriceFromTable(model: string, table: Record<string, PriceEntry>): PriceEntry | undefined {
   // Exact match
@@ -162,19 +168,8 @@ function resolvePriceFromTable(model: string, table: Record<string, PriceEntry>)
     if (table[stripped]) return table[stripped]
   }
 
-  // Prefix match (longest prefix wins) — try original, stripped, and lowercase variants
-  let bestPrefix = ''
-  let bestEntry: PriceEntry | undefined
-  const candidates = [model, stripped, stripped.toLowerCase()]
-  for (const c of candidates) {
-    for (const [prefix, entry] of Object.entries(table)) {
-      if (c.startsWith(prefix) && prefix.length > bestPrefix.length) {
-        bestPrefix = prefix
-        bestEntry = entry
-      }
-    }
-  }
-  return bestEntry
+  const canonical = stripped.toLowerCase()
+  return table[canonical] ?? table[verifiedPriceModelKey(canonical)]
 }
 
 /** Codex logs retain inclusive input/output counters; preserve them in storage.

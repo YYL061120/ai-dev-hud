@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PRICE_TABLE, calculateCost, removePriceOverride, resolvePrice, setPriceOverride } from '../src/pricing.js'
+import { PRICE_TABLE, calculateCost, removePriceOverride, resolvePrice, resolvePriceFromTable, setPriceOverride } from '../src/pricing.js'
 import { FALLBACK_RATE } from '../src/exchange-rate.js'
 import { TEST_PRICE_TABLE } from './setup.js'
 
@@ -173,14 +173,27 @@ describe('calculateCost', () => {
 })
 
 describe('resolvePrice', () => {
-  it('matches longest prefix — kimi-k2-something-unknown resolves to kimi-k2', () => {
-    // kimi-k2-turbo is also a prefix candidate, but kimi-k2 is shorter;
-    // the unknown suffix does NOT match kimi-k2-turbo exactly, so longest
-    // actual prefix match is kimi-k2 (7 chars vs kimi-k2-turbo which is 13
-    // chars and does NOT match "kimi-k2-something-unknown").
-    const entry = resolvePrice('kimi-k2-something-unknown')
-    expect(entry).toBeDefined()
-    expect(entry).toEqual(PRICE_TABLE['kimi-k2'])
+  it('does not price an arbitrary suffix as its known base model', () => {
+    expect(resolvePrice('kimi-k2-something-unknown')).toBeUndefined()
+  })
+
+  it('requires an explicit key for unpublished or future model revisions', () => {
+    const price = { input: 2, output: 10, cacheRead: .1 }
+    const table = { 'gpt-6.1-sol': price }
+    expect(resolvePriceFromTable('gpt-6.1-sol', table)).toEqual(price)
+    expect(resolvePriceFromTable('gpt-6.1-sol-unpublished', table)).toBeUndefined()
+    expect(resolvePriceFromTable('gpt-6.1-sol-20990101', table)).toBeUndefined()
+    // A caller's explicitly registered key is authoritative; no dates are invented.
+    expect(resolvePriceFromTable('gpt-6.1-sol-explicit', { ...table, 'gpt-6.1-sol-explicit': price })).toEqual(price)
+    expect(resolvePriceFromTable('claude-sonnet-4-20250514', { 'claude-sonnet-4': price })).toEqual(price)
+    expect(resolvePriceFromTable('claude-sonnet-4-20990101', { 'claude-sonnet-4': price })).toBeUndefined()
+  })
+
+  it('preserves exact user overrides for otherwise unrecognized suffixes', () => {
+    const model = 'gpt-6.1-sol-unpublished', price = { input: 7, output: 9 }
+    try { setPriceOverride(model, price); expect(resolvePrice(model)).toEqual(price) }
+    finally { removePriceOverride(model) }
+    expect(resolvePrice(model)).toBeUndefined()
   })
 
   it('invalidates cached misses when price overrides change', () => {

@@ -1,5 +1,22 @@
 # 项目状态
 
+## 2026-10-04 真实故障修复（当前最新）
+
+Implemented: 今日 Codex gpt-6.1-sol 缺价却显示 priced zero 已修，inclusive cache/reasoning 单独计费适配；生产 API 与生产 Web 今日金额 $0.1395384（显示约 $0.1395），auto-review 金额未知。Claude 已启用配置真实核验，尚无 statusline 捕获；桌面后台流式会话与终端接入不匹配是证据最吻合的推断，补齐无需重复启用及终端说明。见 [金额实测报告](TODAY_CODEX_COST_FIX.md)、[Claude 实测诊断](CLAUDE_LIVE_DIAGNOSIS.md)。
+
+Not completed: 用户真实 Claude 额度未验，未发送消息或更改接入；30 秒 TTL 不延长，历史值淡化尚未实现。常驻 Electron 目视和物理鼠标未测。Mac 后台说明只读核验仓库，未实机验证或实现自动传输，见 [现有设备传输](LOCAL_DEVICE_TRANSFER.md)。
+
+Files changed: core pricing/Codex parser、CLI local usage 与重算、两组回归、共用详情与 Claude 接入说明、三份报告。
+
+Tests: 全量 build 通过；1178 passed / 1 既有 skip / 0 failed，133 files；隔离生产 Claude E2E 与真实本机 production Web/API 通过，0 page errors。正式 HUD50644/CLI54772 已恢复，Claude/widget 设置哈希不变，主屏偏好1220717916保留；未停止 Claude/Codex 或其他两份 CLI。
+
+Three highest-priority manual tests:
+1. 用户交互终端运行 claude，自行完成正常响应，立即对照 HUD 与 /usage；无需再次启用。
+2. HUD 今日 Codex 金额约 $0.1395、未知模型与部分估算；下一次正常工作后核对 typed API 更新。
+3. 主屏/副屏、右边缘动效、详情与物理穿透回归。
+
+---
+
 旧版恢复提示修复：返回 missing-progress-boundary，明确原会话不能自动恢复，指引开启新的 Claude Code 会话，或本地用量 → Claude 本地额度接入 → 预览停用并恢复 → 确认停用并恢复 → 预览启用 → 确认启用。保守边界不变；真实用户配置未改。最终 build 通过，1175 passed / 1 既有 skip / 0 failed，133 files；生产中英提示与三种即时撤销回归通过。独立审查的 Electron 连接超时，只有实现方此前的隔离原生测试通过，未完成全部独立原生验收。
 
 最新修复：[CLAUDE_CLEAR_FIX.md](CLAUDE_CLEAR_FIX.md)。清除以每会话响应进度边界阻断较早输入；Web/HUD 管理操作同步撤销 Claude，tokens 保留，进行中的旧读取不能回填。build 通过，1174 passed / 1 既有 skip / 0 failed；生产 Web 三组、隔离 Electron 三组及原生双屏回归通过，实际用户 Claude 未启用。

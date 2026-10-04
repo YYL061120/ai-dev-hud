@@ -14,6 +14,7 @@
   <summary>{words('Claude 本地额度接入', 'Claude local quota connection')}</summary>
   <p>{words('仅在你确认后修改用户级 statusline，备份并保留原命令输出。只采集官方额度窗口、时间及不含原值的会话/响应指纹；不保存提示词、回复、账号或凭据，不上传。项目级设置可能覆盖用户设置。确认时请勿同时在外部编辑设置。', 'Only your confirmation changes the user statusline, with a backup and original output preserved. Collects official quota windows, times and opaque session/response hashes only; no prompts, responses, account identity, credentials or uploads. Project settings may override user settings. Do not edit settings elsewhere while confirming.')}</p>
   <p>{words('显示的是当前会话观测，最长 30 秒有效，并非全局账号已验证。多个活跃会话、切号后清除、缺字段或过期时不显示百分比。首次正常响应后才可能收到官方窗口。', 'Shows a session observation valid for at most 30 seconds, not a verified global account. Multiple active sessions, clearing after an account switch, absent fields or expiration hide percentages. Official windows may arrive after the first normal response.')}</p>
+  <p data-testid="claude-terminal-requirement">{words('已启用表示配置已保存，不代表已收到额度。此接入需要交互式终端中的 Claude Code statusline；桌面应用、IDE 后台或 --print 流式会话可能不执行它。无需重复启用；在终端运行 claude，自行完成下一次正常响应后检查。', 'Enabled means settings are saved, not that quota has been received. This connection requires the Claude Code statusline in an interactive terminal; desktop, IDE background and --print sessions may not run it. Do not enable again. Run claude in a terminal and check after your next normal response.')}</p>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if message}<p role="status">{message}</p>{/if}
   {#if status}
